@@ -50,7 +50,6 @@ jobs:
       - name: Test Athos ONNX-CPP
         if: always()
         run: |
-          cd /ezpc_dir/EzPC
           source mpc_venv/bin/activate
           cd Athos/tests/onnx/unittests
           pytest --backend CPP
