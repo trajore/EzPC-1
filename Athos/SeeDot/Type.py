@@ -281,6 +281,18 @@ class InferType(ASTVisitor):
 
         return node.type
 
+    def visitGather(self, node: AST.Gather, args=None):
+        node.expr.gamma = dict(node.gamma)
+        exprType = self.visit(node.expr)
+
+        assert isTensor(exprType) and exprType.dim > 0
+
+        node.type = Tensor(
+            node.shape[1:], exprType.bitlen, exprType.isSecret, exprType.taint
+        )
+
+        return node.type
+
     def visitPool(self, node: AST.Pool, args=None):
         node.expr.gamma = dict(node.gamma)
         exprType = self.visit(node.expr)
@@ -524,9 +536,6 @@ class InferType(ASTVisitor):
         if node.op == AST.Operators.RELU:
             assert isTensor(eType) and eType.dim >= 1
             node.type = copy.copy(eType)
-        elif node.op == AST.Operators.CLIP:
-            assert isTensor(eType) and eType.dim >= 1
-            node.type = copy.copy(eType)
         elif node.op == AST.Operators.TANH:
             assert isTensor(eType)
             node.type = copy.copy(eType)
@@ -534,7 +543,7 @@ class InferType(ASTVisitor):
             assert isTensor(eType)
             node.type = copy.copy(eType)
         elif node.op == AST.Operators.HARDSIGMOID:
-            assert isTensor(eType) and eType.dim >= 1
+            assert isTensor(eType)
             node.type = copy.copy(eType)
         elif node.op == AST.Operators.SQRT:
             assert isTensor(eType)
@@ -598,6 +607,24 @@ class InferType(ASTVisitor):
         assert isInt(dimType) or (isTensor(dimType) and (len(dimType.shape) == 0))
 
         node.type = Tensor(node.outputShape, eType.bitlen, eType.isSecret, eType.taint)
+        return node.type
+
+    def visitUnsqueeze(self, node: AST.Unsqueeze, args=None):
+        node.expr.gamma = dict(node.gamma)
+        exprType = self.visit(node.expr)
+
+        dims = len(node.shape)
+
+        assert isTensor(exprType) and exprType.dim >= 1
+        assert 0 <= node.axis <= dims
+
+        node.type = Tensor(
+            node.shape[: node.axis] + [1] + node.shape[node.axis :],
+            exprType.bitlen,
+            exprType.isSecret,
+            exprType.taint,
+        )
+
         return node.type
 
     def visitReduce(self, node: AST.Reduce, args=None):

@@ -336,12 +336,118 @@ class IRBuilderCSF(IRBuilderAST):
     def visitExpand():
         assert False
 
+    def visitGather(self, node: AST.Gather, args=None):
+        (prog_1, expr_1) = self.visit(node.expr)
+
+        out_arr = self.getTempVar()
+        out_decl = IR.Prog(
+            [
+                IR.Decl(
+                    out_arr.idf,
+                    Type.Tensor(
+                        node.shape[1:],
+                        node.expr.type.bitlen,
+                        node.expr.type.isSecret,
+                        node.expr.type.taint,
+                    ),
+                    isSecret=node.type.isSecret,
+                )
+            ]
+        )
+
+        index_iter = self.getTempIterators(1)
+        iter_decl = IR.Prog([IR.Decl(index_iter[0].idf, Type.Int(), isSecret=False)])
+        iter_assn = IR.Prog([IR.Assn(index_iter[0], IRUtil.Int(node.index))])
+
+        loopShape = node.shape[1:]
+        loopIters = self.getTempIterators(len(node.shape) - 1)
+
+        iter_decl_lst = []
+        for var in loopIters:
+            iter_decl_lst.append(IR.Decl(var.idf, Type.Int(), isSecret=False))
+
+        loop = IRUtil.loop(
+            loopShape,
+            loopIters,
+            [
+                IR.Assn(
+                    IRUtil.addIndex(out_arr, loopIters),
+                    IRUtil.addIndex(expr_1, index_iter + loopIters),
+                )
+            ],
+        )
+
+        prog_out = IRUtil.prog_merge(prog_1, out_decl)
+        prog_out = IRUtil.prog_merge(prog_out, iter_decl)
+        prog_out = IRUtil.prog_merge(prog_out, iter_assn)
+        prog_out = IRUtil.prog_merge(prog_out, IR.Prog(iter_decl_lst))
+        prog_out = IRUtil.prog_merge(prog_out, IR.Prog(loop))
+
+        if not (Util.Config.disableTruncOpti):
+            self.scaleFacMapping[out_arr.idf] = self.scaleFacMapping[expr_1.idf]
+
+        return (prog_out, out_arr)
+
+    def visitUnsqueeze(self, node: AST.Unsqueeze, args=None):
+        (prog_1, expr_1) = self.visit(node.expr)
+
+        out_arr = self.getTempVar()
+        out_decl = IR.Prog(
+            [
+                IR.Decl(
+                    out_arr.idf,
+                    Type.Tensor(
+                        node.shape[: node.axis] + [1] + node.shape[node.axis :],
+                        node.expr.type.bitlen,
+                        node.expr.type.isSecret,
+                        node.expr.type.taint,
+                    ),
+                    isSecret=node.type.isSecret,
+                )
+            ]
+        )
+
+        index_iter = self.getTempIterators(1)
+        iter_decl = IR.Prog([IR.Decl(index_iter[0].idf, Type.Int(), isSecret=False)])
+        iter_assn = IR.Prog([IR.Assn(index_iter[0], IRUtil.zero)])
+
+        loopShape = node.shape
+        loopIters = self.getTempIterators(len(node.shape))
+
+        iter_decl_lst = []
+        for var in loopIters:
+            iter_decl_lst.append(IR.Decl(var.idf, Type.Int(), isSecret=False))
+
+        loop = IRUtil.loop(
+            loopShape,
+            loopIters,
+            [
+                IR.Assn(
+                    IRUtil.addIndex(
+                        out_arr,
+                        loopIters[: node.axis] + index_iter + loopIters[node.axis :],
+                    ),
+                    IRUtil.addIndex(expr_1, loopIters),
+                )
+            ],
+        )
+
+        prog_out = IRUtil.prog_merge(prog_1, out_decl)
+        prog_out = IRUtil.prog_merge(prog_out, iter_decl)
+        prog_out = IRUtil.prog_merge(prog_out, iter_assn)
+        prog_out = IRUtil.prog_merge(prog_out, IR.Prog(iter_decl_lst))
+        prog_out = IRUtil.prog_merge(prog_out, IR.Prog(loop))
+
+        if not (Util.Config.disableTruncOpti):
+            self.scaleFacMapping[out_arr.idf] = self.scaleFacMapping[expr_1.idf]
+
+        return (prog_out, out_arr)
+
     def visitReshape(self, node: AST.Reshape, args=None):
         (prog_1, expr_1) = self.visit(node.expr)
 
         """
         reshape(A, n, h, w)
-
         cmd1:  t1 = t2 = t3 = 0;
         loop2: for n in 0:N:
                  for h in 0:H:
@@ -1351,7 +1457,6 @@ class IRBuilderCSF(IRBuilderAST):
             AST.Operators.Floor,
             AST.Operators.Shape,
             AST.Operators.RELU,
-            AST.Operators.CLIP,
             AST.Operators.TANH,
             AST.Operators.SIGMOID,
             AST.Operators.HARDSIGMOID,
@@ -1372,8 +1477,6 @@ class IRBuilderCSF(IRBuilderAST):
             funcName = "Shape"
         elif node.op == AST.Operators.RELU:
             funcName = "Relu"
-        elif node.op == AST.Operators.CLIP:
-            funcName = "Clip"
         elif node.op == AST.Operators.TANH:
             funcName = "Tanh"
         elif node.op == AST.Operators.SIGMOID:
@@ -1408,11 +1511,6 @@ class IRBuilderCSF(IRBuilderAST):
             for ii, curDim in enumerate(inputType.shape):
                 argsList[IR.Int(curDim, 32)] = "inShape_" + str(ii)
 
-        if node.op == AST.Operators.CLIP:
-            print(f"IRBuilderCSF.py --> {node.alpha, node.beta}")
-            argsList[IR.Int(node.alpha, 32)] = "alpha"
-            argsList[IR.Int(node.beta, 32)] = "beta"
-
         argsList[expr1] = "inArr"
 
         if Type.isTensor(node.type):
@@ -1425,7 +1523,6 @@ class IRBuilderCSF(IRBuilderAST):
         if Util.Config.disableTruncOpti:
             if node.op in [
                 AST.Operators.RELU,
-                AST.Operators.CLIP,
                 AST.Operators.HARDSIGMOID,
             ]:
                 argsList[IR.Int(Util.Config.consSF, 32)] = "consSF"
@@ -1447,7 +1544,6 @@ class IRBuilderCSF(IRBuilderAST):
             final_sf = self.scaleFacMapping[expr1.idf]
             if node.op in [
                 AST.Operators.RELU,
-                AST.Operators.CLIP,
                 AST.Operators.HARDSIGMOID,
             ]:
                 argsList[IR.Int(final_sf - self.scaleFac, 32)] = "consSF"

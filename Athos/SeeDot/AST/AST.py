@@ -39,9 +39,10 @@ OperatorsSymbolDict = {
     "Mean": "mean",
     "MUL": "*",
     "RELU": "relu",
-    "CLIP": "clip",
     "RSQRT": "rsqrt",
     "Shape": "shape",
+    "Unsqueeze": "unsqueeze",
+    "Gather": "gather",
     "SIGMOID": "sigmoid",
     "HARDSIGMOID": "hardsigmoid",
     "SQRT": "sqrt",
@@ -63,7 +64,6 @@ class Operators(Enum):
     CONV = auto()
     CONVTRANSPOSE = auto()
     RELU = auto()
-    CLIP = auto()
     TANH = auto()
     SIGMOID = auto()
     HARDSIGMOID = auto()
@@ -74,6 +74,8 @@ class Operators(Enum):
     ElemWiseDiv = auto()
     Floor = auto()
     Shape = auto()
+    Unsqueeze = auto()
+    Gather = auto()
     Mean = auto()
     ClearMemSecret = auto()
     ClearMemPublic = auto()
@@ -249,6 +251,24 @@ class Reshape(ASTNode):
         self.order = order
 
 
+class Gather(ASTNode):
+    def __init__(self, expr: ASTNode, shape: list, axis: int, index: int):
+        if assertInputTypes:
+            assert isinstance(expr, ASTNode)
+
+            for elem in shape:
+                assert isinstance(elem, int)
+
+            assert isinstance(axis, int)
+            assert isinstance(index, int)
+
+        super().__init__()
+        self.expr = expr
+        self.shape = shape
+        self.axis = axis
+        self.index = index
+
+
 # expr : ASTNode
 # options : Other options required by maxpool
 # 			Order: [FH, FW, zPadHLeft, zPadHRight, zPadWLeft, zPadWRight, strideH, strideW]
@@ -351,6 +371,23 @@ class Func(ASTNode):
                 self.alpha = v
             elif k == "beta":
                 self.beta = v
+
+
+class Unsqueeze(ASTNode):
+    def __init__(self, expr: ID, shape: list, axis: int):
+        if assertInputTypes:
+            assert isinstance(expr, ID)
+            assert isinstance(shape, list)
+
+            for elem in shape:
+                assert isinstance(elem, int)
+
+            assert isinstance(axis, int)
+
+        super().__init__()
+        self.expr = expr
+        self.shape = shape
+        self.axis = axis
 
 
 class Let(ASTNode):

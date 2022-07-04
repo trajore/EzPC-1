@@ -671,12 +671,12 @@ def test_constant(test_dir, backend, shape, attribute):
         values = np.random.randn(*shape).astype(np.float32)
         kwargs[attribute] = values.flatten().astype(float)
     elif attribute == "value_int":
-        values = np.array(np.random.randint(-(2**32 - 1), 2**32 - 1)).astype(
+        values = np.array(np.random.randint(-(2 ** 32 - 1), 2 ** 32 - 1)).astype(
             np.int64
         )
         kwargs[attribute] = int(values)
     elif attribute == "value_ints":
-        values = np.random.randint(-(2**32 - 1), 2**32 - 1, shape).astype(np.int32)
+        values = np.random.randint(-(2 ** 32 - 1), 2 ** 32 - 1, shape).astype(np.int32)
         print(values)
         kwargs[attribute] = values.flatten().astype(int)
 

@@ -2,7 +2,7 @@
 
 **Reference Papers:**  
 
-[SecFloat: Accurate Floating-Point meets Secure 2-Party Computation](https://eprint.iacr.org/2022/)  
+[SecFloat: Accurate Floating-Point meets Secure 2-Party Computation](https://eprint.iacr.org/2022/322)  
 Deevashwer Rathee, Anwesh Bhattacharya, Rahul Sharma, Divya Gupta, Nishanth Chandran, Aseem Rastogi  
 *IEEE S&P 2022*
 
@@ -44,6 +44,16 @@ For setup instructions, please refer to each of the components' readme.
 Alternatively you can use the **setup_env_and_build.sh** script. It installs dependencies and builds each component. It also creates a virtual environment in a *mpc_venv* folder with all the required packages. If you want to do setup with default paths and settings do ``./setup_env_and_build.sh quick``, otherwise if you want to manually choose paths you can use ``./setup_env_and_build.sh``.
 
 Please do ``source mpc_venv/bin/activate`` before using the toolchain.
+
+## Secure AI Validation
+
+To setup the repo with modified SCI build such that only secret shares are revealed at the end of 2PC, run the setup script as ``./setup_env_and_build.sh quick NO_REVEAL_OUTPUT``.
+Alternatively, just rebuild SCI. For instructions to build modified SCI, see README for SCI.
+
+To build docker image for Secure AI Validation, use the `Dockerfile_AI_Validation` dockerfile.
+
+```docker build -t ezpc_modified - < path/to/EzPC/Dockerfile_AI_Validation```
+
 
 ### Docker
 You can use a pre-built docker image from docker hub using ``docker pull ezpc/ezpc:latest``. We occasionally push stable images to that channel. However, if you want a docker image with the latest code, you can build it yourself using:
