@@ -3,7 +3,7 @@ name: CI Testing
 # Controls when the workflow will run
 on:
   push:
-    branches: [ master ]
+    branches: [ CI_Testing ]
   pull_request:
     branches: [ master ]
 
@@ -47,6 +47,8 @@ jobs:
             wget https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/scripts/install.py
             python install.py --deps --tool --ot --sh2pc
             rm -rf install.py
+            eval $(opam config env)
+            ./runemptests.sh
             cd ../../
 
       - name: Setup and Test ABY
