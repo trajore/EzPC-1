@@ -54,6 +54,11 @@ jobs:
       - name: Setup and Test ABY
         env:
             HOME: /root
+            OPAM_SWITCH_PREFIX: /root/.opam/4.10.0
+            CAML_LD_LIBRARY_PATH: /root/.opam/4.10.0/lib/stublibs:/root/.opam/4.10.0/lib/ocaml/stublibs:/root/.opam/4.10.0/lib/ocaml
+            OCAML_TOPLEVEL_PATH: /root/.opam/4.10.0/lib/toplevel
+            MANPATH: :/root/.opam/4.10.0/man
+            PATH: /root/.opam/4.10.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         if: always()
         run: |
           git clone --recursive https://github.com/encryptogroup/ABY.git
@@ -67,7 +72,6 @@ jobs:
           chmod +x runtests.sh
           make runtest
           cd ../..
-        shell: bash
           
   ONNX-CPP:
     # The type of runner that the job will run on
