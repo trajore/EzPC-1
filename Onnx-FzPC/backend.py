@@ -3,7 +3,7 @@ import os, sys
 import onnx.checker
 from onnx.backend.base import Backend
 
-from backendRep import FzpcBackendRep
+from cyborgBackendRep import CyborgBackendRep
 from utils import logger, support_device, optimizations, VariableGen
 from utils.nodes import (
     Node,
@@ -178,7 +178,10 @@ class FzpcBackend(Backend):
         var_dict = create_dict(program)
         logger.info("Onnx Variable -> IR variable Dictionary Created.")
 
-        backend_rep = FzpcBackendRep(
+        # backend_rep = FzpcBackendRep(
+        #     program, value_info, var_dict, path, file_name[:-5]
+        # )
+        backend_rep = CyborgBackendRep(
             program, value_info, var_dict, path, file_name[:-5]
         )
         logger.info("BackendRep Created.")

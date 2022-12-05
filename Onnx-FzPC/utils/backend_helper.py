@@ -14,6 +14,12 @@ def decl(name, data_type, shape, indent, party=Party.ALICE):
         f"{'   ' * indent}auto {name} = make_vector_float({party.name},{comma.join(str(sh) for sh in shape)});"
     )
 
+def if_stmnt(stmnt, indent, party=Party.ALICE):
+    return str(
+        f"{'   ' * indent}if(party == {party.name})\n"
+        f"{'   ' * (indent+1)}{stmnt}\n"
+        f"{'   ' * indent}{'}'}\n"
+    )
 
 def decl_multiple_int(variables, indent):
     need = ""

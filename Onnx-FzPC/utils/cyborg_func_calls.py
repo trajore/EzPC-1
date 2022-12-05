@@ -54,13 +54,8 @@ class Operator:
     @classmethod
     def Relu(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Relu function call.")
-        cmmnt = comment("Call  Relu(shape,input,output)\n", indent)
         return str(
-            cmmnt + f"{'   ' * indent}Relu("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
+            f"{'   ' * indent}new ReLU<mode, scale, backend>(),"
         )
 
     @classmethod
@@ -107,49 +102,33 @@ class Operator:
 
         spatial_size = len(value_info[inputs[0]][1]) - 2
         if spatial_size == 2:
-            assert len(inputs) == 2 or len(inputs) == 3
+            assert len(inputs) == 2 or len(inputs) == 3 # todo: bias is always there or not
             assert len(attributes["strides"]) == 2
             assert value_info[inputs[1]][1][2:] == tuple(attributes["kernel_shape"])
-            filterShape = value_info[inputs[1]][1]
-            N, CI, H, W = value_info[inputs[0]][1]
-            convadd = ""
-            if len(inputs) == 3:
-                convadd = str(
-                    f"{'   ' * indent}ConvAdd("
-                    f"{iterate_list(value_info[outputs[0]][1])}, "
-                    f"{var_dict[outputs[0]]}, {var_dict[inputs[2]]}, {var_dict[outputs[0]]}"
-                    f");"
-                )
-                pass
+            CI = value_info[inputs[0]][1][1]
+            CO = value_info[outputs[0]][1][1]
+            filterShape = value_info[inputs[1]][1][2]
+            pad = pads[0]
+            stride = attributes['strides'][0]
             return (
                 str(
-                    f"{'   ' * indent}Conv2DGroupWrapper("
-                    f"{N}, {CI}, {H}, {W}, "
-                    f"{filterShape[2]}, {filterShape[3]}, {value_info[inputs[1]][1][0]}, "
-                    f"{(iterate_list(pads))}, "
-                    f"{(iterate_list(attributes['strides']))}, "
-                    f"{(attributes['group'] if 'group' in attributes else 1)}, "
-                    f"{iterate_list([var_dict[x] for x in inputs[:2]])}, "
-                    f"{iterate_list([var_dict[x] for x in outputs])}"
-                    f");\n"
+                    f"{'   ' * indent}new Conv2D<mode, scale, backend>("
+                    f"{CI}, {CO}, {filterShape}, {pad}, {stride}"
+                    f"),"
                 )
-                + convadd
             )
 
     @classmethod
     def MaxPool(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside MaxPool function call.")
         pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
+        filter_shape = attributes['kernel_shape'][0]
+        pad = pads[0]
+        stride = attributes['strides'][0]
         return str(
-            f"{'   ' * indent}MaxPool("
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{attributes['kernel_shape'][0]}, {attributes['kernel_shape'][1]}, "
-            f"{iterate_list(pads)}, "
-            f"{attributes['strides'][0]}, {attributes['strides'][1]}, "
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
+            f"{'   ' * indent}new MaxPool2D<mode, scale, backend>("
+            f"{filter_shape}, {pad}, {stride}"
+            f"),"
         )
 
     @classmethod
@@ -182,18 +161,14 @@ class Operator:
     @classmethod
     def AveragePool(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside AveragePool function call.")
-        if "auto_pad" in attributes.keys():
-            pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
+        pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
+        filter_shape = attributes['kernel_shape'][0]
+        pad = pads[0]
+        stride = attributes['strides'][0]
         return str(
-            f"{'   ' * indent}AvgPool("
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{attributes['kernel_shape'][0]}, {attributes['kernel_shape'][1]}, "
-            f"{iterate_list(pads)}, "
-            f"{attributes['strides'][0]}, {attributes['strides'][1]}, "
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
+            f"{'   ' * indent}new AvgPool2D<mode, scale, backend>("
+            f"{filter_shape}, {pad}, {stride}"
+            f"),"
         )
 
     @classmethod
@@ -214,15 +189,9 @@ class Operator:
     @classmethod
     def Flatten(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Flatten function call.")
-        return cls.Reshape(attributes, inputs, outputs, value_info, var_dict, indent)
-        # return str(
-        #     f"{'   ' * indent}Flatten("
-        #     # f"{iterate_list(value_info[inputs[0]][1])}, "
-        #     # f"{(iterate_dict(attributes) if attributes else '')}{',' if attributes else ''}"
-        #     f"{iterate_list(value_info[outputs[0]][1])}, "
-        #     f"{iterate_list([var_dict[x] for x in inputs])}, "
-        #     f"{iterate_list([var_dict[x] for x in outputs])}"
-        #     f");")
+        return str(
+            f"{'   ' * indent}new Flatten<mode, scale, backend>(),"
+        )
 
     @classmethod
     def Reshape(cls, attributes, inputs, outputs, value_info, var_dict, indent):
@@ -247,28 +216,13 @@ class Operator:
     @classmethod
     def Gemm(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Gemm function call.")
-        code = ""
-        if len(value_info[inputs[2]][1]) == 2:
-            code += decl("bias_mod", "fparray2d", [value_info[inputs[2]][1][1]], indent)
-            code += "\n"
-            value_info["bias_mod"] = ("fparray", [value_info[inputs[2]][1][1]])
-            var_dict["bias_mod"] = "bias_mod"
-            code += cls.Reshape(
-                attributes, [inputs[2]], ["bias_mod"], value_info, var_dict, indent
-            )
-            inputs[2] = "bias_mod"
-        code += str(
-            f"{'   ' * indent}Gemm("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list(value_info[inputs[1]][1])}, "
-            f"{attributes['alpha']}, {attributes['beta']}, "
-            f"{attributes['transA']}, {attributes['transB']}, "
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
+        inn = value_info[inputs[0]][1][1]
+        out = value_info[outputs[0]][1][1]
+        return str(
+                    f"{'   ' * indent}new FC<mode, scale, backend>("
+                    f"{inn}, {out}"
+                    f"),"
         )
-        return code
 
     @classmethod
     def Tanh(cls, attributes, inputs, outputs, value_info, var_dict, indent):
