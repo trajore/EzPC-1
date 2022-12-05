@@ -1,63 +1,10 @@
 from onnx.backend.base import BackendRep
 
 from utils import logger, Party
-from utils.backend_helper import decl, comment, take_input, delete_variable, give_output, if_stmnt
+from utils.backend_helper import decl, comment, take_input, delete_variable, give_output, if_stmnt, iterate_list
 from utils.cyborg_func_calls import Operator
 from utils.nodes import Node, Input, Output, print_nodes
 from utils.onnx_nodes import OnnxNode
-
-
-def process_delete_list(program):
-    """
-    Prepares a list of variables to be deleted after each function call if they are not needed in the program ahead.
-    :param program: Program List
-    :return: Variables Delete Order List
-    """
-
-    logger.debug("Processing Delete Variables Order List.")
-    delete_order_list = [None] * len(program)
-    counter = len(program) - 1
-    deleted = []
-
-    def update(dummy_list, variable):
-        dummy_list.append(variable)
-        deleted.append(variable)
-
-    for node in reversed(program):
-        if isinstance(node, Node):
-            tmp_list = []
-            [
-                update(tmp_list, variable) if variable not in deleted else None
-                for variable in node.inputs
-            ]
-            delete_order_list[counter] = tmp_list
-        counter -= 1
-
-    return delete_order_list
-
-
-def check_variables_to_delete(delete_order_list, code_list, counter, var_dict, indent):
-    """
-    Checks and adds code to delete any variable if not needed any further.
-    :param delete_order_list: Variables Delete Order List
-    :param code_list: Code-List in CPP Format.
-    :param counter: Counter for the Last Node processed
-    :param var_dict: Variable Dictionary
-    :param indent: Space Indentation
-    :return: NA
-    """
-    if delete_order_list[counter] is not None:
-        code_list.append(
-            comment(
-                f"Deleting Variable {delete_order_list[counter]} as they are not needed further.",
-                indent + 1,
-            )
-        )
-        [
-            code_list.append(delete_variable(var_dict[variable], indent + 1))
-            for variable in delete_order_list[counter]
-        ]
-        code_list.append("\n\n")
 
 
 def prepare_input(code_list, node, var_dict, input_taken, indent):
@@ -146,7 +93,7 @@ def prepare_export(program, var_dict, value_info):
         func(node)
 
     # Start CPP program
-    code_list.append('#include <iostream>\n#include <vector>\n#include "layers.h"\n#include "softmax.h"\n#include <cmath>\n#include <iomanip>\n\n\n')
+    code_list.append('#include <iostream>\n#include <vector>\n#include "layers.h"\n#include "softmax.h"\n#include <cmath>\n#include <iomanip>\n\n')
     code_list.append(
     '''int main(int __argc, char **__argv){
         
@@ -155,7 +102,7 @@ def prepare_export(program, var_dict, value_info):
     )
 
     # Input
-    code_list.append(f"{'   ' * (indent+1)}input goes here\n\n")
+    code_list.append(f"{'   ' * (indent+1)}Tensor4D<mode> input({iterate_list(program[0].shape)});\n")
 
     code_list.append(f"{'   ' * (indent+1)}auto model = Sequential<u64>({'{'}")
     for node in program:

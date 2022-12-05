@@ -59,41 +59,9 @@ class Operator:
         )
 
     @classmethod
-    def LeakyRelu(cls, attributes, inputs, outputs, value_info, var_dict, indent):
-        logger.debug("Inside Relu function call.")
-        cmmnt = comment("Call  Relu(shape,input,output)\n", indent)
-        return str(
-            cmmnt + f"{'   ' * indent}Relu("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{attributes['alpha']}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
-
-    @classmethod
-    def Sigmoid(cls, attributes, inputs, outputs, value_info, var_dict, indent):
-        logger.debug("Inside Sigmoid function call.")
-        cmmnt = comment("Call  Sigmoid(shape,input,output)\n", indent)
-        return str(
-            cmmnt + f"{'   ' * indent}Sigmoid("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
-
-    @classmethod
     def Softmax(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Softmax function call.")
-        cmmnt = comment("Call  Softmax(shape,input,output)\n", indent)
-        return str(
-            cmmnt + f"{'   ' * indent}Softmax("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
+        # todo: check format
 
     @classmethod
     def Conv(cls, attributes, inputs, outputs, value_info, var_dict, indent):
@@ -132,33 +100,6 @@ class Operator:
         )
 
     @classmethod
-    def Concat(cls, attributes, inputs, outputs, value_info, var_dict, indent):
-        logger.debug("Inside Concat function call.")
-        return str(
-            f"{'   ' * indent}Concat{len(inputs)}T{iterate_concat_list([len(value_info[x][1]) for x in inputs])}{len(value_info[outputs[0]][1])}("
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{iterate_list([concat_list(value_info, var_dict, x) for x in inputs])}, "
-            f"{attributes['axis']}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
-
-    @classmethod
-    def BatchNormalization(
-        cls, attributes, inputs, outputs, value_info, var_dict, indent
-    ):
-        logger.debug("Inside BatchNormalization function call.")
-        return str(
-            f"{'   ' * indent}BatchNormalization("
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            # f"{(iterate_dict(attributes) if attributes else '')}{',' if attributes else ''}"
-            # f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
-
-    @classmethod
     def AveragePool(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside AveragePool function call.")
         pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
@@ -172,21 +113,6 @@ class Operator:
         )
 
     @classmethod
-    def GlobalAveragePool(
-        cls, attributes, inputs, outputs, value_info, var_dict, indent
-    ):
-        logger.debug("Inside GloablAveragePool function call.")
-        return str(
-            f"{'   ' * indent}AvgPool("
-            f"{iterate_list(value_info[outputs[0]][1])}, "
-            f"{value_info[inputs[0]][1][2]}, {value_info[inputs[0]][1][3]}, 0, 0, 0, 0, 1, 1, "
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
-        )
-
-    @classmethod
     def Flatten(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Flatten function call.")
         return str(
@@ -196,22 +122,7 @@ class Operator:
     @classmethod
     def Reshape(cls, attributes, inputs, outputs, value_info, var_dict, indent):
         logger.debug("Inside Reshape function call.")
-        # counter1, counter2 = len(value_info(inputs[0])[1]), len(value_info(outputs[0])[1])
-        variables1 = generate_reshape_vars(len(value_info[inputs[0]][1]))
-        variables2 = generate_reshape_vars(len(value_info[outputs[0]][1]))
-        code = decl_multiple_int(variables1, indent)
-        code += nested_for_reshape_loop(
-            0,
-            value_info[inputs[0]][1],
-            variables1,
-            0,
-            value_info[outputs[0]][1],
-            variables2,
-            var_dict[inputs[0]],
-            var_dict[outputs[0]],
-            indent,
-        )
-        return code
+        # todo : check format
 
     @classmethod
     def Gemm(cls, attributes, inputs, outputs, value_info, var_dict, indent):
@@ -222,16 +133,4 @@ class Operator:
                     f"{'   ' * indent}new FC<mode, scale, backend>("
                     f"{inn}, {out}"
                     f"),"
-        )
-
-    @classmethod
-    def Tanh(cls, attributes, inputs, outputs, value_info, var_dict, indent):
-        logger.debug("Inside Tanh function call.")
-        cmmnt = comment("Call  Tanh(shape,input,output)\n", indent)
-        return str(
-            cmmnt + f"{'   ' * indent}Tanh("
-            f"{iterate_list(value_info[inputs[0]][1])}, "
-            f"{iterate_list([var_dict[x] for x in inputs])}, "
-            f"{iterate_list([var_dict[x] for x in outputs])}"
-            f");"
         )

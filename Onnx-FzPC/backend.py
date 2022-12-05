@@ -110,14 +110,10 @@ class FzpcBackend(Backend):
         not_supported = []
         implemented = [
             "Relu",
-            "Sigmoid",
             "Softmax",
             "Conv",
             "MaxPool",
-            "Concat",
-            "BatchNormalization",
             "AveragePool",
-            "GlobalAveragePool",
             "Flatten",
             "Reshape",
             "Gemm",
