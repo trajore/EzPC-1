@@ -52,85 +52,86 @@ class Operator:
     """
 
     @classmethod
-    def Relu(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Relu(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Relu function call.")
-        return str(
-            f"{'   ' * indent}new ReLU<mode, scale, backend>(),"
-        )
+        return str(f"{'   ' * indent}new ReLU<{mode}>(),")
 
     @classmethod
-    def Softmax(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Truncate(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
+        logger.debug("Inside Truncate function call.")
+        return str(f"{'   ' * indent}new Truncate<{mode}>(scale),")
+
+    @classmethod
+    def Softmax(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Softmax function call.")
         # todo: check format
 
     @classmethod
-    def Conv(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Conv(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Conv function call.")
         pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
 
         spatial_size = len(value_info[inputs[0]][1]) - 2
         if spatial_size == 2:
-            assert len(inputs) == 2 or len(inputs) == 3 # todo: bias is always there or not
+            assert (
+                len(inputs) == 2 or len(inputs) == 3
+            )  # todo: bias is always there or not
             assert len(attributes["strides"]) == 2
             assert value_info[inputs[1]][1][2:] == tuple(attributes["kernel_shape"])
             CI = value_info[inputs[0]][1][1]
             CO = value_info[outputs[0]][1][1]
             filterShape = value_info[inputs[1]][1][2]
             pad = pads[0]
-            stride = attributes['strides'][0]
-            return (
-                str(
-                    f"{'   ' * indent}new Conv2D<mode, scale, backend>("
-                    f"{CI}, {CO}, {filterShape}, {pad}, {stride}"
-                    f"),"
-                )
+            stride = attributes["strides"][0]
+            return str(
+                f"{'   ' * indent}new Conv2D<{mode}, scale>("
+                f"{CI}, {CO}, {filterShape}, {pad}, {stride}"
+                f"),\n"
+            ) + cls.Truncate(
+                attributes, inputs, outputs, value_info, var_dict, mode, indent
             )
 
     @classmethod
-    def MaxPool(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def MaxPool(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside MaxPool function call.")
         pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
-        filter_shape = attributes['kernel_shape'][0]
+        filter_shape = attributes["kernel_shape"][0]
         pad = pads[0]
-        stride = attributes['strides'][0]
+        stride = attributes["strides"][0]
         return str(
-            f"{'   ' * indent}new MaxPool2D<mode, scale, backend>("
+            f"{'   ' * indent}new MaxPool2D<{mode}>("
             f"{filter_shape}, {pad}, {stride}"
             f"),"
         )
 
     @classmethod
-    def AveragePool(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def AveragePool(
+        cls, attributes, inputs, outputs, value_info, var_dict, mode, indent
+    ):
         logger.debug("Inside AveragePool function call.")
         pads = get_padding(attributes, inputs, outputs, value_info, var_dict)
-        filter_shape = attributes['kernel_shape'][0]
+        filter_shape = attributes["kernel_shape"][0]
         pad = pads[0]
-        stride = attributes['strides'][0]
+        stride = attributes["strides"][0]
         return str(
-            f"{'   ' * indent}new AvgPool2D<mode, scale, backend>("
+            f"{'   ' * indent}new AvgPool2D<{mode}>("
             f"{filter_shape}, {pad}, {stride}"
             f"),"
         )
 
     @classmethod
-    def Flatten(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Flatten(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Flatten function call.")
-        return str(
-            f"{'   ' * indent}new Flatten<mode, scale, backend>(),"
-        )
+        return str(f"{'   ' * indent}new Flatten<{mode}>(),")
 
     @classmethod
-    def Reshape(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Reshape(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Reshape function call.")
         # todo : check format
 
     @classmethod
-    def Gemm(cls, attributes, inputs, outputs, value_info, var_dict, indent):
+    def Gemm(cls, attributes, inputs, outputs, value_info, var_dict, mode, indent):
         logger.debug("Inside Gemm function call.")
         inn = value_info[inputs[0]][1][1]
         out = value_info[outputs[0]][1][1]
-        return str(
-                    f"{'   ' * indent}new FC<mode, scale, backend>("
-                    f"{inn}, {out}"
-                    f"),"
-        )
+        return str(f"{'   ' * indent}new FC<{mode}, scale>(" f"{inn}, {out}" f"),")
