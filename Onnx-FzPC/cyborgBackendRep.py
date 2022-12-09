@@ -88,13 +88,15 @@ def prepare_output(code_list, node, var_dict, indent):
 
 
 def cleartext_pre(code_list, program, scale, mode, indent):
-    code_list.append('#include "backend_cleartxt.cpp"')
+    code_list.append("#define USE_CLEARTEXT")
+    code_list.append('#include "backend_support.cpp"')
+    code_list.append('#include "backend/cleartext.h"')
     code_list.append(
         '#include <iostream>\n#include <vector>\n#include "layers.h"\n#include "softmax.h"\n#include <cmath>\n#include <iomanip>\n\n'
     )
     code_list.append("int main(int __argc, char **__argv){\n")
 
-    code_list.append(f"{'   ' * (indent+1)}const int scale = {scale}\n")
+    code_list.append(f"{'   ' * (indent+1)}const int scale = {scale};\n")
     code_list.append(
         f"{'   ' * (indent+1)}prngWeights.SetSeed(osuCrypto::toBlock(time(NULL)));"
     )
@@ -113,6 +115,50 @@ def cleartext_pre(code_list, program, scale, mode, indent):
     code_list.append(f"{'   ' * (indent+1)}image.load(actual_image, {scale});\n")
 
 
+def llama_pre(code_list, program, scale, mode, bitlength, indent):
+    code_list.append("#define USE_LLAMA")
+    code_list.append('#include "backend_support.cpp"')
+    code_list.append(
+        '#include "backend/llama_extended.h"\n#include "backend/minillama/relu.h"\n#include "backend/minillama/and.h"\n\n'
+    )
+    code_list.append("int main(int __argc, char **__argv){\n")
+
+    code_list.append(f"{'   ' * (indent+1)}using LlamaVersion = Llama<u64>;")
+    code_list.append(f"{'   ' * (indent+1)}srand(time(NULL));\n")
+
+    code_list.append(f"{'   ' * (indent+1)}const u64 scale = {scale};")
+    code_list.append(f"{'   ' * (indent+1)}int party = atoi(__argv[1]);\n")
+
+    code_list.append(f"{'   ' * (indent+1)}LlamaConfig::bitlength = {bitlength};")
+    code_list.append(f"{'   ' * (indent+1)}LlamaConfig::party = atoi(__argv[1]);")
+    code_list.append(f"{'   ' * (indent+1)}LlamaConfig::stochasticT = true;")
+    code_list.append(f"{'   ' * (indent+1)}LlamaConfig::stochasticRT = true;")
+    code_list.append(f'{"   " * (indent+1)}LlamaVersion::init("127.0.0.1");\n')
+
+    code_list.append(
+        f"{'   ' * (indent+1)}prngWeights.SetSeed(osuCrypto::toBlock(time(NULL)));"
+    )
+    code_list.append(
+        f"{'   ' * (indent+1)}prng.SetSeed(osuCrypto::toBlock(time(NULL)));\n"
+    )
+
+    # Input
+    n, c, h, w = program[0].shape
+    code_list.append(
+        f"{'   ' * (indent+1)}Tensor4D<{mode}> image({iterate_list([n,h,w,c])});\n"
+    )
+    code_list.append(f"{'   ' * (indent+1)}if(party == CLIENT){'{'}")
+    code_list.append(
+        f"{'   ' * (indent+2)}auto actual_image = input({iterate_list([n,h,w,c])});"
+    )
+    code_list.append(f"{'   ' * (indent+2)}image.load(actual_image, {scale});")
+    code_list.append(f"{'   ' * (indent+1)}{'}'}\n")
+
+    code_list.append(
+        f"{'   ' * (indent+1)}Llama<u64>::initializeInferencePartyB(image);\n"
+    )
+
+
 def cleartext_post(code_list, program, scale, mode, indent):
     code_list.append(f"{'   ' * (indent+1)}model.load(scale);")
 
@@ -121,7 +167,27 @@ def cleartext_post(code_list, program, scale, mode, indent):
     code_list.append(f"{'   ' * (indent+1)}model.activation.print();\n")
 
 
-def prepare_export(program, var_dict, value_info, mode, scale, backend):
+def llama_post(code_list, program, scale, mode, indent):
+    code_list.append(f"{'   ' * (indent+1)}if(party == SERVER){'{'}")
+    code_list.append(f"{'   ' * (indent+2)}model.load(scale);")
+    code_list.append(f"{'   ' * (indent+1)}{'}'}")
+    code_list.append(
+        f"{'   ' * (indent+1)}Llama<u64>::initializeInferencePartyA(model);\n"
+    )
+
+    code_list.append(f"{'   ' * (indent+1)}StartComputation();")
+    code_list.append(f"{'   ' * (indent+1)}model.forward(image);")
+    code_list.append(f"{'   ' * (indent+1)}EndComputation();\n")
+
+    code_list.append(f"{'   ' * (indent+1)}Llama<u64>::output(model.activation);\n")
+    code_list.append(f"{'   ' * (indent+1)}if(party == CLIENT){'{'}")
+    code_list.append(f"{'   ' * (indent+2)}model.activation.print(scale);")
+    code_list.append(f"{'   ' * (indent+1)}{'}'}\n")
+
+    code_list.append(f"{'   ' * (indent+1)}Llama<u64>::finalize();\n")
+
+
+def prepare_export(program, var_dict, value_info, mode, scale, bitlength, backend):
     """
     Prepares the Program List for export by converting it into cpp format.
     :param program: Program List having a list of Input, Nodes and Output nodes classes.
@@ -144,6 +210,8 @@ def prepare_export(program, var_dict, value_info, mode, scale, backend):
 
     if backend == "CLEARTEXT":
         cleartext_pre(code_list, program, scale, mode, indent)
+    elif backend == "LLAMA":
+        llama_pre(code_list, program, scale, mode, bitlength, indent)
 
     code_list.append(f"{'   ' * (indent+1)}auto model = Sequential<{mode}>({'{'}")
     for node in program:
@@ -155,6 +223,8 @@ def prepare_export(program, var_dict, value_info, mode, scale, backend):
 
     if backend == "CLEARTEXT":
         cleartext_post(code_list, program, scale, mode, indent)
+    elif backend == "LLAMA":
+        llama_post(code_list, program, scale, mode, indent)
 
     code_list.append("      return 0;\n")
     code_list.append("}")
@@ -176,20 +246,26 @@ class CyborgBackendRep(BackendRep):
         self.path = path
         self.file_name = file_name
 
-    def export_model(self, mode, scale, backend):
+    def export_model(self, mode, scale, bitlength, backend):
         """
         Exports the FzpcBackendRep to Secfloat Backend in .cpp format following the crypto protocols.
         :return: NA
         """
         logger.info(f"Preparing to export Model to {backend}")
         code_list = prepare_export(
-            self.program_AST, self.var_dict, self.value_info, mode, scale, backend
+            self.program_AST,
+            self.var_dict,
+            self.value_info,
+            mode,
+            scale,
+            bitlength,
+            backend,
         )
         logger.info(
             f"Secure Model File Saved in Secfloat format as {self.file_name}_secfloat.cpp"
         )
 
-        with open(self.path + f"/{self.file_name}_{backend}.cpp", "w") as fp:
+        with open(self.path + f"/{self.file_name}_{backend}_{scale}.cpp", "w") as fp:
             fp.write("\n".join(code_list))
 
 

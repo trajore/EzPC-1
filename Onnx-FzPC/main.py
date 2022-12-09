@@ -1,17 +1,30 @@
-import argparse, sys, os
+import argparse
+from sys import argv
 from utils import logger
 
 from backend import prepare
 
 
 def parse_args():
+    backend = ["CLEARTEXT", "LLAMA"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", required=True, type=str, help="Path to the Model.")
     parser.add_argument(
-        "--mode", required=True, type=str, help="Mode i.e u64|i64|float."
+        "--mode",
+        required=(backend[0] in argv),
+        type=str,
+        help="Mode i.e u64|i64|float.\n For LLAMA it is u64 only.",
+        default="u64",
     )
     parser.add_argument(
         "--scale", required=True, type=int, help="Scale for computation", default=0
+    )
+    parser.add_argument(
+        "--bitlength",
+        required=(backend[1] in argv),
+        type=int,
+        help="Bitlength for computation(required for LLAMA only)",
+        default=0,
     )
     parser.add_argument(
         "--backend", required=True, type=str, help="Backend to compile model to."
@@ -30,7 +43,7 @@ def main():
     backendrep = prepare(args.path)
 
     # Export the Model as Secfloat and writes to a cpp file
-    backendrep.export_model(args.mode, args.scale, args.backend)
+    backendrep.export_model(args.mode, args.scale, args.bitlength, args.backend)
 
     # if args.generate == "executable":
     #     logger.info("Starting Compilation.")
