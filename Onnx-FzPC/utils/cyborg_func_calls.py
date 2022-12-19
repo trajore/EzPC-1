@@ -83,9 +83,10 @@ class Operator:
             filterShape = value_info[inputs[1]][1][2]
             pad = pads[0]
             stride = attributes["strides"][0]
+            isBias = ", true" if len(inputs) == 3 else ""
             return str(
                 f"{'   ' * indent}new Conv2D<{mode}, scale>("
-                f"{CI}, {CO}, {filterShape}, {pad}, {stride}"
+                f"{CI}, {CO}, {filterShape}, {pad}, {stride}{isBias}"
                 f"),\n"
             ) + cls.Truncate(
                 attributes, inputs, outputs, value_info, var_dict, mode, indent
@@ -134,4 +135,10 @@ class Operator:
         logger.debug("Inside Gemm function call.")
         inn = value_info[inputs[0]][1][1]
         out = value_info[outputs[0]][1][1]
-        return str(f"{'   ' * indent}new FC<{mode}, scale>(" f"{inn}, {out}" f"),")
+        isBias = ", true" if len(inputs) == 3 else ""
+
+        return str(
+            f"{'   ' * indent}new FC<{mode}, scale>(" f"{inn}, {out}{isBias}" f"),\n"
+        ) + cls.Truncate(
+            attributes, inputs, outputs, value_info, var_dict, mode, indent
+        )

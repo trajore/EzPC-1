@@ -1,43 +1,11 @@
 from onnx.backend.base import BackendRep
 
-from utils import logger, Party
-from utils.backend_helper import (
-    decl,
-    comment,
-    take_input,
-    delete_variable,
-    give_output,
-    if_stmnt,
-    iterate_list,
-)
+from utils import logger
+from utils.backend_helper import iterate_list
+
 from utils.cyborg_func_calls import Operator
-from utils.nodes import Node, Input, Output, print_nodes
+from utils.nodes import Node
 from utils.onnx_nodes import OnnxNode
-
-
-def prepare_input(code_list, node, var_dict, input_taken, indent):
-    """
-    Adds code for Input Nodes in Code-List in CPP Format.
-    :param code_list: Code-List in CPP Format.
-    :param node: Input Node to be processed.
-    :param var_dict: Variable Dictionary.
-    :param input_taken: List of variables already input to update it with new inputs.
-    :param indent: Space Indentation.
-    :return: NA
-    """
-    if isinstance(node, Input):
-        code_list.append(
-            comment(
-                f"Declaration and Input for variable {node.name} of shape {node.shape} as {var_dict[node.name]}",
-                indent + 1,
-            )
-        )
-        # code_list.append(decl(var_dict[node.name], node.data_type, node.shape, indent + 1))
-        code_list.append(
-            take_input(var_dict[node.name], node.shape, node.party, indent + 1)
-        )
-        code_list.append("\n\n")
-        input_taken.append(node.name)
 
 
 def prepare_func(code_list, node, var_dict, value_info, input_taken, mode, indent):
@@ -65,28 +33,6 @@ def prepare_func(code_list, node, var_dict, value_info, input_taken, mode, inden
     )
 
 
-def prepare_output(code_list, node, var_dict, indent):
-    """
-    Adds code for Input Nodes in Code-List in CPP Format.
-    :param code_list: Code-List in CPP Format.
-    :param node: Input Node to be processed.
-    :param var_dict: Variable Dictionary.
-    :param indent: Space Indentation.
-    :return: NA
-    """
-    if isinstance(node, Output):
-        code_list.append(
-            comment(
-                f"Output of variable '{node.name}' of shape {node.shape} as {var_dict[node.name]} to {node.party.name}",
-                indent + 1,
-            )
-        )
-        code_list.append(
-            give_output(var_dict[node.name], node.shape, node.party, indent + 1)
-        )
-        code_list.append("\n\n")
-
-
 def cleartext_pre(code_list, program, scale, mode, indent):
     code_list.append("#define USE_CLEARTEXT")
     code_list.append('#include "backend_support.cpp"')
@@ -112,7 +58,15 @@ def cleartext_pre(code_list, program, scale, mode, indent):
     code_list.append(
         f"{'   ' * (indent+1)}auto actual_image = input({iterate_list([n,h,w,c])});"
     )
-    code_list.append(f"{'   ' * (indent+1)}image.load(actual_image, {scale});\n")
+    code_list.append(f"{'   ' * (indent+1)}image.load(actual_image, scale);\n")
+
+
+def cleartext_post(code_list, program, scale, mode, indent):
+    code_list.append(f"{'   ' * (indent+1)}model.load(scale);")
+
+    code_list.append(f"{'   ' * (indent+1)}model.forward(image);")
+
+    code_list.append(f"{'   ' * (indent+1)}model.activation.print(scale);\n")
 
 
 def llama_pre(code_list, program, scale, mode, bitlength, indent):
@@ -151,20 +105,12 @@ def llama_pre(code_list, program, scale, mode, bitlength, indent):
     code_list.append(
         f"{'   ' * (indent+2)}auto actual_image = input({iterate_list([n,h,w,c])});"
     )
-    code_list.append(f"{'   ' * (indent+2)}image.load(actual_image, {scale});")
+    code_list.append(f"{'   ' * (indent+2)}image.load(actual_image, scale);")
     code_list.append(f"{'   ' * (indent+1)}{'}'}\n")
 
     code_list.append(
         f"{'   ' * (indent+1)}Llama<u64>::initializeInferencePartyB(image);\n"
     )
-
-
-def cleartext_post(code_list, program, scale, mode, indent):
-    code_list.append(f"{'   ' * (indent+1)}model.load(scale);")
-
-    code_list.append(f"{'   ' * (indent+1)}model.forward(image);")
-
-    code_list.append(f"{'   ' * (indent+1)}model.activation.print();\n")
 
 
 def llama_post(code_list, program, scale, mode, indent):

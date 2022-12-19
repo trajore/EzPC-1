@@ -18,6 +18,23 @@ def get_data_type(proto_val):
 
 def numpy_float_array_to_float_val_str(input_array):
     chunk = ""
+    if len(input_array.shape) == 4:
+        co, ci, h, w = input_array.shape
+        arr = np.zeros([co, h, w, ci])
+        for i in range(co):
+            for j in range(ci):
+                for k in range(h):
+                    for l in range(w):
+                        arr[i][k][l][j] = input_array[i][j][k][l]
+        input_array = arr
+    elif len(input_array.shape) == 2:
+        co, ci = input_array.shape
+        arr = np.zeros([ci, co])
+        for i in range(co):
+            for j in range(ci):
+                arr[j][i] = input_array[i][j]
+        input_array = arr
+    print(input_array.shape)
     for val in np.nditer(input_array):
         chunk += str(val) + "\n"
     return chunk
