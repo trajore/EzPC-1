@@ -1,10 +1,12 @@
+#!/usr/bin/env python3
 import numpy as np
 import onnxruntime as rt
 import sys, os
 
 if __name__ == "__main__":
     input_np_arr = np.load(sys.argv[1], allow_pickle=True)
-    sess = rt.InferenceSession("../demo/model.onnx")
+    # print("Input:\n", input_np_arr)
+    sess = rt.InferenceSession("../onnx_new_files/lenet.onnx")
     input_name = sess.get_inputs()[0].name
     pred_onx = sess.run(None, {input_name: input_np_arr})[0]
     print("Output:\n", pred_onx.flatten())
