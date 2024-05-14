@@ -8,36 +8,11 @@
 #include <llama/assert.h>
 #include <cmath>
 #include <filesystem>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <fstream>
-#include <unistd.h>
+
 typedef uint64_t u64;
 typedef uint8_t u8;
 typedef int64_t i64;
 typedef int32_t i32;
-
-template <typename T>
-inline T type_cast(float val);
-
-template <>
-inline float type_cast(float val)
-{
-    return val;
-}
-
-template <>
-inline i64 type_cast(float val)
-{
-    return (i64)val;
-}
-
-template <>
-inline u64 type_cast(float val)
-{
-    return (u64(i64(val)));
-}
 
 template <typename T>
 class TensorRef {
@@ -188,7 +163,7 @@ public:
     void copy(const Tensor<T> &other, bool copyGraph = true) {
         assert_same_shape(other);
         // memcpy(data, other.data, size() * sizeof(T));
-        //#pragma omp parallel for
+        #pragma omp parallel for
         for(u64 i = 0; i < size(); ++i)
         {
             data[i] = other.data[i];
@@ -213,8 +188,7 @@ public:
         {
             double d;
             std::cin >> d;
-            data[i] = type_cast<T>(d * (1LL << scale));
-
+            data[i] = (i64)(d * (1LL << scale));
         }
     }
 
@@ -234,27 +208,23 @@ public:
             u64 curr_channel = (i / rest_size) % num_channel;
             u64 curr_rest = i % rest_size;
             u64 new_idx = curr_batch * (num_channel * rest_size) + curr_rest * num_channel + curr_channel;
-#ifdef Do_Masking
-            data[new_idx] = type_cast<T>(d);
-#else
-            data[new_idx] = type_cast<T>(d * (1LL << scale));
-#endif        
+            data[new_idx] = (i64)(d * (1LL << scale));
         }
     }
 
     void print()
     {
-        std::cout << "Tensor(";
-        for (int i = 0; i < this->shape.size(); i++)
-        {
-            std::cout << this->shape[i] << ", ";
-        }
-        std::cout << ")" << "\n";
+        // std::cout << "Tensor(";
+        // for (int i = 0; i < this->shape.size(); i++)
+        // {
+        //     std::cout << this->shape[i] << ", ";
+        // }
+        // std::cout << ")" << std::endl;
         for (u64 i = 0; i < size(); i++)
         {
             std::cout << data[i] << " ";
         }
-        std::cout << "\n";
+        std::cout << std::endl;
     }
 
     void printshape() {
@@ -262,7 +232,7 @@ public:
         for(int i = 0; i < this->shape.size(); i++) {
             std::cout << this->shape[i] << ", ";
         }
-        std::cout << ")" << "\n";
+        std::cout << ")" << std::endl;
     }
 
     T multidir_broadcast_value(const std::vector<u64> &broadcast_shape, const std::vector<u64> &idx) const
@@ -309,7 +279,7 @@ public:
                     {
                         for (int m = 0; m < d5; m++)
                         {
-                            this->data[i * d2 * d3 * d4 * d5 + j * d3 * d4 * d5 + k * d4 * d5 + l * d5 + m] = type_cast<T>(arr[i][j][k][l][m] * (1LL << scale));
+                            this->data[i * d2 * d3 * d4 * d5 + j * d3 * d4 * d5 + k * d4 * d5 + l * d5 + m] = (i64)(arr[i][j][k][l][m] * scale);
                         }
                     }
                 }
@@ -322,23 +292,14 @@ public:
         size_t size_in_bytes = std::filesystem::file_size(filename);
         always_assert(size_in_bytes == size() * 4);
         float *floatInput = new float[size()];
-        int buffersize;
-        // std::ifstream file(filename, std::ios::binary);
-        // file.read((char*) floatInput, size_in_bytes);
-        // file.close();
-        int fd2 = open(filename.c_str(), O_RDWR | O_CREAT, 0);
-        struct stat sb;
-        fstat(fd2, &sb);
-        buffersize = sb.st_size;
-        int advise=posix_fadvise(fd2, 0, sb.st_size, POSIX_FADV_WILLNEED);
-        floatInput= (float*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
+        std::ifstream file(filename, std::ios::binary);
+        file.read((char*) floatInput, size_in_bytes);
+        file.close();
         for(u64 i = 0; i < size(); ++i)
         {
-            data[i] = type_cast<T>(floatInput[i] * (1LL << scale));
+            data[i] = T(floatInput[i] * (1LL << scale));
         }
-        ::close(fd2);
-        //delete[] floatInput;
-        munmap(floatInput, buffersize);
+        delete[] floatInput;
     }
 
     Tensor5D<T> as_5d()
@@ -406,6 +367,11 @@ public:
             this->data[i] = val;
         }
     }
+
+    Tensor<T> as_nd()
+    {
+        return Tensor<T>(data, {d1});
+    }
 };
 
 template <typename T>
@@ -468,6 +434,19 @@ public:
                 this->data[i * this->d2 + j] = val;
             }
         }
+    }
+
+    u64 argmax(u64 i) {
+        assert(i < d1);
+        u64 maxIndex = 0;
+        T maxValue = data[i * d2];
+        for (u64 j = 1; j < d2; j++) {
+            if (data[i * d2 + j] > maxValue) {
+                maxValue = data[i * d2 + j];
+                maxIndex = j;
+            }
+        }
+        return maxIndex;
     }
 
     Tensor<T> as_nd()
@@ -625,3 +604,4 @@ public:
     }
 
 };
+

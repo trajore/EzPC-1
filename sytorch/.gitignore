@@ -21,3 +21,5 @@ graph.pdf
 venv/
 demo/
 scratch/
+*.inp
+*.csv

@@ -137,7 +137,7 @@ void Conv2DReshapeInput(size_t N, size_t H, size_t W, size_t CI, size_t FH, size
 						size_t curPosW = leftTopCornerW + fw;
 						for (size_t ci = 0; ci < CI; ci++){
                             size_t rowidx = (fh*FW*CI) + (fw*CI) + ci;
-                            // std::cout << rowidx << "\n";
+                            // std::cout << rowidx << std::endl;
 							if ((((curPosH < 0) || (curPosH >= H)) || ((curPosW < 0) || (curPosW >= W)))){
 								Arr2DIdx(outputArr, RRows, RCols, rowidx, linIdxFilterMult) = 0L;
 							}
@@ -335,6 +335,28 @@ void matmul_eval_helper(int party, int dim1, int dim2, int dim3, GroupElement *A
     eigenMicroseconds += duration.count();
 }
 
+void matmul_eval_helper_triangular(int party, int dim1, int dim2, int dim3, GroupElement *A,
+                            GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc) {
+    auto start = std::chrono::high_resolution_clock::now();
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_A(A, dim1, dim2);
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_ka(ka, dim1, dim2);
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_B(B, dim2, dim3);
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_kb(kb, dim2, dim3);
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_C(C, dim1, dim3);
+    Eigen::Map<Eigen::Matrix<uint64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> eigen_kc(kc, dim1, dim3);
+
+    if (party == SERVER) {
+        eigen_C = ((eigen_A - eigen_ka) * eigen_B - eigen_A * eigen_kb + eigen_kc).triangularView<Eigen::Lower>();
+    }
+    else {
+        eigen_C = (eigen_kc - eigen_ka * eigen_B - eigen_A * eigen_kb).triangularView<Eigen::Lower>();
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    eigenMicroseconds += duration.count();
+}
+
 void packBitArray(GroupElement *A, int size, uint8_t *out) {
     int bytesize = (size % 8 == 0) ? (size / 8) : (size / 8 + 1);
     for (int i = 0; i < bytesize; ++i) {
@@ -385,7 +407,7 @@ void Conv3DReshapeInput(size_t N, size_t D, size_t H, size_t W, size_t CI, size_
                                 size_t curPosW = leftTopCornerW + fw;
                                 for (size_t ci = 0; ci < CI; ci++){
                                     size_t rowidx = (fd*FH*FW*CI) + (fh*FW*CI) + (fw*CI) + ci;
-                                    // std::cout << rowidx << "\n";
+                                    // std::cout << rowidx << std::endl;
                                     if ((((curPosD < 0) || (curPosD >= D)) || ((curPosH < 0) || (curPosH >= H)) || ((curPosW < 0) || (curPosW >= W)))){
                                         Arr2DIdx(outputArr, RRows, RCols, rowidx, linIdxFilterMult) = 0L;
                                     }
@@ -526,7 +548,7 @@ Conv3DCache allocateConv3DCache(int N, int D, int H, int W, int CI,
     cache.reshapedFilter = eigenMatrix(reshapedFilterRows, reshapedFilterCols);
 	cache.reshapedInput = eigenMatrix(reshapedIPRows, reshapedIPCols);
 	cache.matmulResult = eigenMatrix(reshapedFilterRows, reshapedIPCols);
-    cache.temp = make_array<GroupElement>(N, newD, newH, newW, CO);
+    cache.temp = make_array<GroupElement>(N, newH, newW, CO);
 
     return cache;
 }
@@ -596,7 +618,7 @@ void ConvTranspose3DLoopInnerClear(
     zPadWLeft = FW - 1 - zPadWLeft;
     zPadWRight = FW - 1 - zPadWRight;
 
-    //#pragma omp parallel for collapse(5)
+    #pragma omp parallel for collapse(5)
     for (int64_t n =  0; n < N; n++){
         for (int64_t d =  0; d < outD; d++){
             for (int64_t h =  0; h < outH; h++){
@@ -633,79 +655,10 @@ void ConvTranspose3DLoopInnerClear(
                             }
                         }
                         Arr5DIdx(outArr, N, outD, outH, outW, CO, n, d, h, w, co) =  val;
-                        // std::cout << "setting element at (" << n << " " << d << " " << h << " " << w << " " << co << ")" << "\n";
+                        // std::cout << "setting element at (" << n << " " << d << " " << h << " " << w << " " << co << ")" << std::endl;
                     }
                 }
             }
         }
     }
 }
-
-void ConvTranspose2DLoopInnerClear(
-    int64_t N,
-    int64_t H,
-    int64_t W,
-    int64_t CI,
-    int64_t FH,
-    int64_t FW,
-    int64_t CO,
-    int64_t zPadHLeft,
-    int64_t zPadHRight,
-    int64_t zPadWLeft,
-    int64_t zPadWRight,
-    int64_t strideH,
-    int64_t strideW,
-    int64_t outH,
-    int64_t outW,
-    GroupElement *inputArr,
-    GroupElement *filterArr,
-    GroupElement *outArr)
-{
-    zPadHLeft = FH - 1 - zPadHLeft;
-    zPadHRight = FH - 1 - zPadHRight;
-    zPadWLeft = FW - 1 - zPadWLeft;
-    zPadWRight = FW - 1 - zPadWRight;
-
-#pragma omp parallel for collapse(4)
-    for (int64_t n = 0; n < N; n++)
-    {
-        for (int64_t h = 0; h < outH; h++)
-        {
-            for (int64_t w = 0; w < outW; w++)
-            {
-                for (int64_t co = 0; co < CO; co++)
-                {
-
-                    GroupElement val = 0;
-                    for (int64_t ci = 0; ci < CI; ci++)
-                    {
-                        for (int64_t fh = h; fh < (h + FH); fh++)
-                        {
-                            for (int64_t fw = w; fw < (w + FW); fw++)
-                            {
-
-                                int64_t curPosH = ((fh - zPadHLeft) / strideH);
-                                int64_t curPosW = ((fw - zPadWLeft) / strideW);
-
-                                if ((curPosH >= 0) &&
-                                    (curPosW >= 0) &&
-                                    (curPosH < H) &&
-                                    (curPosW < W) &&
-                                    (((fh - zPadHLeft) % strideH) == 0) &&
-                                    (((fw - zPadWLeft) % strideW) == 0))
-                                {
-                                    int32_t curFilterPosH = FH + h - fh - 1;
-                                    int32_t curFilterPosW = FW + w - fw - 1;
-                                    val += (Arr4DIdx(inputArr, N, H, W, CI, n, curPosH, curPosW, ci) * Arr4DIdx(filterArr, CO, FH, FW, CI, co, curFilterPosH, curFilterPosW, ci));
-                                }
-                            }
-                        }
-                    }
-                    Arr4DIdx(outArr, N, outH, outW, CO, n, h, w, co) = val;
-                    // std::cout << "setting element at (" << n << " " << h << " " << w << " " << co << ")" << std::endl;
-                }
-            }
-        }
-    }
-}
-

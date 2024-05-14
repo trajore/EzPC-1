@@ -1,6 +1,5 @@
 #pragma once
 #include <sytorch/utils.h>
-#include "cleartext.h"
 #include <llama/config.h>
 #include <llama/input_prng.h>
 #include <llama/comms.h>
@@ -16,46 +15,25 @@ class LlamaBase : public Backend<T> {
 public:
     const bool useLocalTruncation = false;
 
-    void init(std::string ip, bool ramdisk = true,bool ramdisk_path=false)
+    void init(std::string ip, std::string id = "0",std::string key_path ="./" ,bool ramdisk = false)
     {
+        std::string server_file = key_path+"server" + id + ".dat";
+        std::string client_file = key_path+"client" + id + ".dat";
         u64 seedKey = 0xdeadbeefbadc0ffe;
         for(int i = 0; i < 256; ++i) {
             LlamaConfig::prngs[i].SetSeed(osuCrypto::toBlock(i, seedKey));
         }
         if (LlamaConfig::party == 1) {
-            std::cerr<<ramdisk<<ramdisk_path<<"\n";
-            if (ramdisk && ramdisk_path)
-            {
-            LlamaConfig::server = new Peer("/tmp/ramdisk/server.dat");
-            LlamaConfig::client = new Peer("/tmp/ramdisk/client.dat");
-            }
-            else
-            {
-            LlamaConfig::server = new Peer("server.dat");
-            LlamaConfig::client = new Peer("client.dat");
-            }
+            LlamaConfig::server = new Peer(server_file);
+            LlamaConfig::client = new Peer(client_file);
         }
         else if (LlamaConfig::party == 2) {
-            if(ramdisk && ramdisk_path)
-            {
-            LlamaConfig::dealer = new Dealer("/tmp/ramdisk/server.dat", ramdisk,ramdisk_path);
-            }
-            else
-            {
-            LlamaConfig::dealer = new Dealer("server.dat", ramdisk,ramdisk_path);
-            }
+            LlamaConfig::dealer = new Dealer(server_file, ramdisk);
             LlamaConfig::client = waitForPeer(42005);
             LlamaConfig::peer = LlamaConfig::client;
         }
         else if (LlamaConfig::party == 3) {
-            if(ramdisk && ramdisk_path)
-            {
-            LlamaConfig::dealer = new Dealer("/tmp/ramdisk/client.dat", ramdisk,ramdisk_path);
-            }
-            else
-            {
-            LlamaConfig::dealer = new Dealer("client.dat", ramdisk,ramdisk_path);
-            }
+            LlamaConfig::dealer = new Dealer(client_file, ramdisk);
             LlamaConfig::server = new Peer(ip, 42005);
             LlamaConfig::peer = LlamaConfig::server;
         }
@@ -86,19 +64,11 @@ public:
     void initializeInferencePartyB(Tensor<T>&data){
         u64 size = data.size();
         if(LlamaConfig::party == 1){
-#ifdef Do_Masking
-                input_no_prng_with_frontend(nullptr, data.data, size, 3);
-#else
-                input_layer(nullptr, data.data, size, 3);
-#endif        
+            input_layer(nullptr,data.data, size, 3);
         }
         else{
             Tensor<T> tmp(data.shape);
-#ifdef Do_Masking
-            input_no_prng_with_frontend(data.data, tmp.data, size, 3);
-#else
             input_layer(data.data, tmp.data, size, 3);
-#endif
         }
     }
 
@@ -122,6 +92,18 @@ public:
                 }
             }
         });
+    }
+
+    void send_n_seq(u64 n_seq)
+    {
+         std::cout << "sending n_seq" << std::endl;
+         LlamaConfig::server->send_input(n_seq);
+    }
+
+    GroupElement recv_n_seq()
+    {
+         std::cout << "receiving n_seq" << std::endl;
+         return LlamaConfig::client->recv_input();
     }
 
     void inputA(Tensor<T> &data)
@@ -167,13 +149,44 @@ public:
 
     void outputA(T *a, u64 sz) {
         if (LlamaConfig::party == 1) {
-            for (int i = 0; i < sz; i++){
+            for (int i = 0; i < sz; i++)
+            {
                 LlamaConfig::client->send_mask(a[i]);
                 a[i] = 0;
             }
         }
         else if(LlamaConfig::party ==3) {
             for (int i = 0; i < sz; i++){
+                auto mask = LlamaConfig::dealer->recv_mask();
+                a[i] = a[i] - mask;
+            }
+        }
+    }
+
+    void outputShares(T *a, u64 sz)
+    {
+        if (LlamaConfig::party == 1)
+        {
+            for (int i = 0; i < sz; i++)
+            {
+                std::pair<GroupElement, GroupElement> out_mask = splitShare(a[i], LlamaConfig::bitlength);
+                LlamaConfig::server->send_mask(-1 * out_mask.first);
+                LlamaConfig::client->send_mask(out_mask.second);
+                a[i] = 0;
+            }
+        }
+        else if (LlamaConfig::party == 2)
+        {
+            for (int i = 0; i < sz; i++)
+            {
+                auto mask = LlamaConfig::dealer->recv_mask();
+                a[i] = mask;
+            }
+        }
+        else if (LlamaConfig::party == 3)
+        {
+            for (int i = 0; i < sz; i++)
+            {
                 auto mask = LlamaConfig::dealer->recv_mask();
                 a[i] = a[i] - mask;
             }
@@ -198,7 +211,7 @@ public:
 
     void ss2m(T *data, u64 size)
     {
-        std::cerr << ">> SS2M - Start" << "\n";
+        std::cerr << ">> SS2M - Start" << std::endl;
         if (LlamaConfig::party == 1) {
             for (int i = 0; i < size; i++){
                 data[i] = random_ge(64);
@@ -214,7 +227,7 @@ public:
             }
             reconstruct(size, data, 64);
         }
-        std::cerr << ">> SS2M - End" << "\n";
+        std::cerr << ">> SS2M - End" << std::endl;
     }
 
     void matmul(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
@@ -222,6 +235,13 @@ public:
         assert(c.d1 == a.d1);
         assert(c.d2 == b.d2);
         MatMul2D(a.d1, a.d2, b.d2, a.data, a.data, b.data, b.data, c.data, c.data, true);
+    }
+
+    void matmul_triangular(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
+        assert(a.d2 == b.d1);
+        assert(c.d1 == a.d1);
+        assert(c.d2 == b.d2);
+        MatMul2DTriangular(a.d1, a.d2, b.d2, a.data, a.data, b.data, b.data, c.data, c.data, true);
     }
 
     void matmulTransposeA(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
@@ -305,22 +325,6 @@ public:
             output.d2, output.d3, output.d4, input.data, filter.data, output.data);
     }
 
-    void convTranspose2D(u64 fh, u64 fw, u64 ph, u64 pw, u64 sh, u64 sw, u64 ci, u64 co, const Tensor4D<T> &input, const Tensor2D<T> &filter, Tensor4D<T> &output)
-    {
-        assert(input.d4 == ci);
-        assert(filter.d1 == co);
-        assert(filter.d2 == fh * fw * ci);
-        u64 newH = (((input.d2 - 1) * sh + fh - 2 * ph));
-        u64 newW = (((input.d3 - 1) * sw + fw - 2 * pw));
-        assert(output.d1 == input.d1);
-        assert(output.d2 == newH);
-        assert(output.d3 == newW);
-        assert(output.d4 == co);
-
-        ConvTranspose2DWrapper(input.d1, input.d2, input.d3, input.d4, fh, fw, co,
-                               ph, ph, pw, pw, sh, sw, output.d2, output.d3, input.data, filter.data, output.data);
-    }
-
     void sumPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out) {
         assert(in.d1 == out.d1);
         assert(in.d4 == out.d4);
@@ -384,7 +388,7 @@ public:
             A2.data[i] = A.data[i % channels];
         }
 
-        ElemWiseSecretSharedVectorMult(x.size(), x.data, x.data, A2.data, A2.data, y.data, y.data);
+        ElemWiseMul(x.size(), x.data, A2.data, y.data);
 
         for (u64 i = 0; i < x.size(); ++i)
         {
@@ -394,20 +398,40 @@ public:
     }
 
     void add(const std::vector<Tensor<T> *> &in, Tensor<T> &out) {
-        auto ct = new ClearText<T>;
-        ct->add(in, out);
-        delete ct;
+        always_assert(in.size() > 0);
+        always_assert(out.size() == in[0]->size());
+        for (int i = 0; i < in.size(); i++) {
+            always_assert(out.size() == in[i]->size());
+        }
+
+        #pragma omp parallel for
+        for(u64 i = 0; i < out.size(); ++i) 
+        {
+            T sum = 0;
+            for (int j = 0; j < in.size(); j++) {
+                sum += in[j]->data[i];
+            }
+            out.data[i] = sum;
+        }
     }
 
     void addbias(Tensor<T> &x, const Tensor1D<T> &bias) {
-        auto ct = new ClearText<T>;
-        ct->addbias(x, bias);
-        delete ct;
+        always_assert(x.shape.back() == bias.d1);
+        
+        #pragma omp parallel for
+        for(u64 i = 0; i < x.size(); ++i)
+        {
+            x.data[i] += bias(i % bias.d1);
+        }
     }
 
     void scalarmul(Tensor<T> &x, T scalar, Tensor<T> &y) {
-        auto ct = new ClearText<T>;
-        ct->scalarmul(x, scalar, y);
-        delete ct;
+        always_assert(x.is_same_shape(y));
+        
+        #pragma omp parallel for
+        for(u64 i = 0; i < x.size(); ++i)
+        {
+            y.data[i] = x.data[i] * scalar;
+        }
     }
 };

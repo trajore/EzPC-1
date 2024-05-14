@@ -11,7 +11,6 @@ In the above command, the paths are not local, but are the locations on the resp
 - `-b <backend>`: the MPC backend to use (default: `LLAMA`)
 - `-scale <scale>`: the scaling factor for the model input (default: `15`)
 - `-bl <bitlength>`: the bitlength to use for the MPC computation (default: `40`)
-- `-nt <numthreads>`: the number of threads to use for MPC computation (default: `4`)
 
 The script generates 4 scripts:
 
@@ -30,13 +29,13 @@ Using the above instructions, we now demonstrate LeNet inference on MNIST images
 
 ```bash
 sudo apt update
-sudo apt install libeigen3-dev cmake build-essential git zip
+sudo apt install libeigen3-dev cmake build-essential git
 ```
 
 2. On all machines, install the python dependencies in a virtual environment.
 
 ```bash
-sudo apt install python3.8-venv
+sudo apt install python3.10-venv
 python3 -m venv venv
 source venv/bin/activate
 wget https://raw.githubusercontent.com/mpc-msri/EzPC/master/OnnxBridge/requirements.txt
@@ -77,8 +76,8 @@ cd tmp
 
 ```bash
 git clone https://github.com/mpc-msri/EzPC
-cd EzPC/sytorch
-chmod +x ezpc-cli-2.sh
+cd EzPC
+cd sytorch
 ./ezpc-cli-2.sh -m /home/<user>/lenet-demo-server/lenet.onnx -preprocess /home/<user>/lenet-demo-server/preprocess.py -s <SERVER-IP> -d <DEALER-IP>
 scp server.sh <SERVER-IP>:/home/<user>/lenet-demo-server/tmp/
 scp dealer.sh  <DEALER-IP>:/home/<user>/lenet-demo-dealer/tmp/

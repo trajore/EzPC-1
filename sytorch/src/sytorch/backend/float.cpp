@@ -3,8 +3,7 @@
 #include <Eigen/Dense>
 
 template <typename T>
-void FloatClearText<T>::matmul(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c)
-{
+void FloatClearText<T>::matmul(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
     assert(a.d2 == b.d1);
     assert(c.d1 == a.d1);
     assert(c.d2 == b.d2);
@@ -15,8 +14,7 @@ void FloatClearText<T>::matmul(const Tensor2D<T> &a, const Tensor2D<T> &b, Tenso
 }
 
 template <typename T>
-void FloatClearText<T>::matmul_triangular(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c)
-{
+void FloatClearText<T>::matmul_triangular(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
     assert(a.d2 == b.d1);
     assert(c.d1 == a.d1);
     assert(c.d2 == b.d2);
@@ -27,8 +25,7 @@ void FloatClearText<T>::matmul_triangular(const Tensor2D<T> &a, const Tensor2D<T
 }
 
 template <typename T>
-void FloatClearText<T>::matmulTransposeA(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c)
-{
+void FloatClearText<T>::matmulTransposeA(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
     assert(a.d1 == b.d1);
     assert(c.d1 == a.d2);
     assert(c.d2 == b.d2);
@@ -39,8 +36,7 @@ void FloatClearText<T>::matmulTransposeA(const Tensor2D<T> &a, const Tensor2D<T>
 }
 
 template <typename T>
-void FloatClearText<T>::matmulTransposeB(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c)
-{
+void FloatClearText<T>::matmulTransposeB(const Tensor2D<T> &a, const Tensor2D<T> &b, Tensor2D<T> &c) {
     assert(a.d2 == b.d2);
     assert(c.d1 == a.d1);
     assert(c.d2 == b.d1);
@@ -56,16 +52,17 @@ void FloatClearText<T>::conv2D(u64 fh, u64 fw, u64 padding, u64 stride, u64 ci, 
     assert(input.d4 == ci);
     assert(filter.d1 == co);
     assert(filter.d2 == fh * fw * ci);
-    u64 newH = (((input.d2 + 2 * padding - fh) / stride) + 1);
-    u64 newW = (((input.d3 + 2 * padding - fw) / stride) + 1);
+    u64 newH = (((input.d2 + 2*padding - fh)/stride) + 1);
+    u64 newW = (((input.d3 + 2*padding - fw)/stride) + 1);
     assert(output.d1 == input.d1);
     assert(output.d2 == newH);
     assert(output.d3 == newW);
     assert(output.d4 == co);
+
     Tensor2D<T> reshapedInput = reshapeInputTransposed<T>(input, padding, stride, fh, fw);
     Tensor2D<T> tempOutput(filter.d1, reshapedInput.d1);
     matmulTransposeB(filter, reshapedInput, tempOutput);
-    reshapeOutput<T>(tempOutput, input.d1, (((input.d2 + 2 * padding - fh) / stride) + 1), (((input.d3 + 2 * padding - fw) / stride) + 1), co, output);
+    reshapeOutput<T>(tempOutput, input.d1, (((input.d2 + 2*padding - fh)/stride) + 1), (((input.d3 + 2*padding - fw)/stride) + 1), co, output);
 }
 
 template <typename T>
@@ -77,9 +74,9 @@ void FloatClearText<T>::conv3D(u64 fd, u64 fh, u64 fw, u64 pd, u64 ph, u64 pw, u
     always_assert(dd == 1);
     always_assert(dh == 1);
     always_assert(dw == 1);
-    u64 newD = (((input.d2 + 2 * pd - fd - (fd - 1) * (dd - 1)) / sd) + 1);
-    u64 newH = (((input.d3 + 2 * ph - fh - (fh - 1) * (dh - 1)) / sh) + 1);
-    u64 newW = (((input.d4 + 2 * pw - fw - (fw - 1) * (dw - 1)) / sw) + 1);
+    u64 newD = (((input.d2 + 2*pd - fd - (fd-1)*(dd-1))/sd) + 1);
+    u64 newH = (((input.d3 + 2*ph - fh - (fh-1)*(dh-1))/sh) + 1);
+    u64 newW = (((input.d4 + 2*pw - fw - (fw-1)*(dw-1))/sw) + 1);
     assert(output.d1 == input.d1);
     assert(output.d2 == newD);
     assert(output.d3 == newH);
@@ -94,118 +91,65 @@ void FloatClearText<T>::conv3D(u64 fd, u64 fh, u64 fw, u64 pd, u64 ph, u64 pw, u
 
 template <typename T>
 void FloatClearText<T>::convTranspose3D(u64 fd, u64 fh, u64 fw, u64 pd, u64 ph, u64 pw, u64 sd, u64 sh, u64 sw, u64 ci, u64 co, const Tensor5D<T> &input, const Tensor2D<T> &filter, Tensor5D<T> &output)
-{
-    assert(input.d5 == ci);
-    assert(filter.d1 == co);
-    assert(filter.d2 == fd * fh * fw * ci);
-    u64 newD = (((input.d2 - 1) * sd + fd - 2 * pd));
-    u64 newH = (((input.d3 - 1) * sh + fh - 2 * ph));
-    u64 newW = (((input.d4 - 1) * sw + fw - 2 * pw));
-    assert(output.d1 == input.d1);
-    assert(output.d2 == newD);
-    assert(output.d3 == newH);
-    assert(output.d4 == newW);
-    assert(output.d5 == co);
+    {
+        assert(input.d5 == ci);
+        assert(filter.d1 == co);
+        assert(filter.d2 == fd * fh * fw * ci);
+        u64 newD = (((input.d2 - 1)*sd + fd - 2*pd));
+        u64 newH = (((input.d3 - 1)*sh + fh - 2*ph));
+        u64 newW = (((input.d4 - 1)*sw + fw - 2*pw));
+        assert(output.d1 == input.d1);
+        assert(output.d2 == newD);
+        assert(output.d3 == newH);
+        assert(output.d4 == newW);
+        assert(output.d5 == co);
 
-    convTranspose3dLoop<T>(input.d1, input.d2, input.d3, input.d4, input.d5, fd, fh, fw, co,
-                           pd, pd, ph, ph, pw, pw, sd, sh, sw,
-                           output.d2, output.d3, output.d4, input.data, filter.data, output.data);
-}
-
-template <typename T>
-void FloatClearText<T>::convTranspose2D(u64 fh, u64 fw, u64 ph, u64 pw, u64 sh, u64 sw, u64 ci, u64 co, const Tensor4D<T> &input, const Tensor2D<T> &filter, Tensor4D<T> &output)
-{
-    assert(input.d4 == ci);
-    assert(filter.d1 == co);
-    assert(filter.d2 == fh * fw * ci);
-    u64 newH = (((input.d2 - 1) * sh + fh - 2 * ph));
-    u64 newW = (((input.d3 - 1) * sw + fw - 2 * pw));
-    assert(output.d1 == input.d1);
-    assert(output.d2 == newH);
-    assert(output.d3 == newW);
-    assert(output.d4 == co);
-
-    convTranspose2dLoop<T>(input.d1, input.d2, input.d3, input.d4, fh, fw, co,
-                           ph, ph, pw, pw, sh, sw,
-                           output.d2, output.d3, input.data, filter.data, output.data);
-}
+        convTranspose3dLoop<T>(input.d1, input.d2, input.d3, input.d4, input.d5, fd, fh, fw, co, 
+            pd, pd, ph, ph, pw, pw, sd, sh, sw,
+            output.d2, output.d3, output.d4, input.data, filter.data, output.data);
+    }
 
 template <typename T>
-void FloatClearText<T>::relu(const Tensor<T> &in, const Tensor<T> &out, const Tensor<T> &drelu, u64 scale, int mode)
-{
+void FloatClearText<T>::relu(const Tensor<T> &in, const Tensor<T> &out, const Tensor<T> &drelu, u64 scale, int mode) {
     assert(in.is_same_shape(out));
     assert(in.is_same_shape(drelu));
-    fastfor(in.size(), [&](u64 i)
-            {
+    fastfor(in.size(), [&] (u64 i) {
         drelu.data[i] = (T)(in.data[i] > 0);
-        out.data[i] = (in.data[i] > 0) ? in.data[i] : 0; });
+        out.data[i] = (in.data[i] > 0) ? in.data[i] : 0;
+    });
 }
 
 template <typename T>
-void FloatClearText<T>::leakyRelu(const Tensor<T> &in, const Tensor<T> &out, const Tensor<T> &drelu, u64 scale, int mode, T alpha)
-{
-    assert(in.is_same_shape(out));
-    assert(in.is_same_shape(drelu));
-    std::vector<u64> shape = in.shape;
-
-    // leakyrelu = relu(x) - alpha * relu(-x)
-    Tensor<T> relu_x(shape);
-    // relu(x)
-    relu(in, relu_x, drelu, scale, mode);
-
-    // -x
-    Tensor<T> minus_x(shape);
-    fastfor(in.size(), [&](u64 i)
-            { minus_x.data[i] = -1.0 * in.data[i]; });
-
-    // relu(-x)
-    Tensor<T> relu_minus_x(shape);
-    relu(minus_x, relu_minus_x, drelu, scale, mode);
-
-    // alpha * relu(-x)
-    Tensor<T> alpha_relu_minus_x(shape);
-    fastfor(in.size(), [&](u64 i)
-            { alpha_relu_minus_x.data[i] = (T)(alpha * relu_minus_x.data[i]); });
-
-    // relu(x) - alpha * relu(-x)
-    fastfor(in.size(), [&](u64 i)
-            { out.data[i] = (relu_x.data[i] - alpha_relu_minus_x.data[i]); });
-}
-
-template <typename T>
-void FloatClearText<T>::truncate(T *in, T *out, u64 shift, u64 size, u8 mode)
-{
+void FloatClearText<T>::truncate(T *in, T *out, u64 shift, u64 size, u8 mode) {
     always_assert(shift == 0);
-    fastfor(size, [&](u64 i)
-            { out[i] = in[i]; });
+    fastfor(size, [&] (u64 i) {
+        out[i] = in[i];
+    });
 }
 
 template <typename T>
-void FloatClearText<T>::div(Tensor<T> &in, T divisor, u64 scale)
-{
+void FloatClearText<T>::div(Tensor<T> &in, T divisor, u64 scale) {
     always_assert(scale == 0);
 
-    fastfor(in.size(), [&](u64 i)
-            { in.data[i] /= divisor; });
+    fastfor(in.size(), [&] (u64 i) {
+        in.data[i] /= divisor;
+    });
 }
 
 template <typename T>
-void FloatClearText<T>::div(T &in, T divisor, u64 scale)
-{
+void FloatClearText<T>::div(T &in, T divisor, u64 scale) {
     in = in / divisor;
 }
 
 template <typename T>
-void FloatClearText<T>::sumPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out)
-{
+void FloatClearText<T>::sumPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out) {
     assert(in.d1 == out.d1);
     assert(in.d4 == out.d4);
-    u64 newH = (in.d2 + 2 * padding - ks) / stride + 1;
-    u64 newW = (in.d3 + 2 * padding - ks) / stride + 1;
+    u64 newH = (in.d2 + 2*padding - ks)/stride + 1;
+    u64 newW = (in.d3 + 2*padding - ks)/stride + 1;
     assert(out.d2 == newH);
     assert(out.d3 == newW);
-    fastfor(in.d1, [&](int i)
-            {
+    fastfor(in.d1, [&] (int i) {
         for(int j = 0; j < newH; j++) {
             for(int k = 0; k < newW; k++) {
                 for(int l = 0; l < in.d4; l++) {
@@ -218,28 +162,26 @@ void FloatClearText<T>::sumPool2D(u64 ks, u64 padding, u64 stride, const Tensor4
                     out(i, j, k, l) = sum;
                 }
             }
-        } });
+        }
+    });
 }
 
 template <typename T>
-void FloatClearText<T>::avgPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out, u64 scale)
-{
+void FloatClearText<T>::avgPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out, u64 scale) {
     sumPool2D(ks, padding, stride, in, out);
     auto out_nd = out.as_nd();
-    div(out_nd, (T)(ks * ks), scale);
+    div(out_nd, (T)(ks*ks), scale);
 }
 
 template <typename T>
-void FloatClearText<T>::maxPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out, Tensor4D<u64> &maxIdx, u64 scale, u8 mode)
-{
+void FloatClearText<T>::maxPool2D(u64 ks, u64 padding, u64 stride, const Tensor4D<T> &in, Tensor4D<T> &out, Tensor4D<u64> &maxIdx, u64 scale, u8 mode) {
     assert(in.d1 == out.d1);
     assert(in.d4 == out.d4);
-    u64 newH = (in.d2 + 2 * padding - ks) / stride + 1;
-    u64 newW = (in.d3 + 2 * padding - ks) / stride + 1;
+    u64 newH = (in.d2 + 2*padding - ks)/stride + 1;
+    u64 newW = (in.d3 + 2*padding - ks)/stride + 1;
     assert(out.d2 == newH);
     assert(out.d3 == newW);
-    fastfor(in.d1, [&](int i)
-            {
+    fastfor(in.d1, [&](int i) {
         for(int j = 0; j < newH; j++) {
             for(int k = 0; k < newW; k++) {
                 for(int l = 0; l < in.d4; l++) {
@@ -264,7 +206,8 @@ void FloatClearText<T>::maxPool2D(u64 ks, u64 padding, u64 stride, const Tensor4
                     maxIdx(i, j, k, l) = maxIdxI * ks + maxIdxJ;
                 }
             }
-        } });
+        }
+    });
 }
 
 template <typename T>
@@ -275,8 +218,9 @@ void FloatClearText<T>::batchNormInference(const Tensor1D<T> &A, const Tensor1D<
     assert(x.is_same_shape(y));
     u64 channels = x.shape.back();
 
-    fastfor(x.size(), [&](u64 i)
-            { y.data[i] = x.data[i] * A(i % channels) + B(i % channels); });
+    fastfor(x.size(), [&](u64 i) {
+        y.data[i] = x.data[i] * A(i % channels) + B(i % channels);
+    });
 }
 
 template <typename T>
@@ -284,27 +228,26 @@ void FloatClearText<T>::add(const std::vector<Tensor<T> *> &in, Tensor<T> &out)
 {
     always_assert(in.size() > 0);
     always_assert(out.size() == in[0]->size());
-    for (int i = 0; i < in.size(); i++)
-    {
+    for (int i = 0; i < in.size(); i++) {
         always_assert(out.size() == in[i]->size());
     }
-    fastfor(out.size(), [&](int i)
-            {
+    fastfor(out.size(), [&](int i) {
         T sum = 0;
         for (int j = 0; j < in.size(); j++) {
             sum += in[j]->data[i];
         }
-        out.data[i] = sum; });
+        out.data[i] = sum;
+    });
 }
 
 template <typename T>
 void FloatClearText<T>::gelu(const Tensor<T> &in, const Tensor<T> &out, u64 scale, u64 mode)
 {
     always_assert(scale == 0);
-    fastfor(in.size(), [&](u64 i)
-            {
+    fastfor(in.size(), [&](u64 i) {
         T x = in.data[i];
-        out.data[i] = 0.5 * x * (1 + erf(x / sqrt(2.0))); });
+        out.data[i] = 0.5 * x * (1 + erf(x / sqrt(2.0)));
+    });
 }
 
 template <typename T>
@@ -321,28 +264,23 @@ void FloatClearText<T>::softmax(Tensor<T> &_in, Tensor<T> &_out, u64 scale, u64 
 
     auto batchSize = in.d1;
     auto numClasses = in.d2;
-    for (int b = 0; b < batchSize; ++b)
-    {
+    for(int b = 0; b < batchSize; ++b) {
         T max = in(b, 0);
-        for (u64 j = 1; j < numClasses; ++j)
-        {
-            if (in(b, j) > max)
-            {
+        for(u64 j = 1; j < numClasses; ++j) {
+            if(in(b, j) > max) {
                 max = in(b, j);
             }
         }
 
         double den = 0.0;
         double exps[numClasses];
-        for (u64 j = 0; j < numClasses; ++j)
-        {
+        for(u64 j = 0; j < numClasses; ++j) {
             double x = in(b, j) - max;
             exps[j] = std::exp(x);
             den += exps[j];
         }
 
-        for (u64 j = 0; j < numClasses; ++j)
-        {
+        for(u64 j = 0; j < numClasses; ++j) {
             out(b, j) = exps[j] / den;
         }
     }
@@ -355,6 +293,7 @@ void FloatClearText<T>::softmax_triangular(Tensor<T> &_in, Tensor<T> &_out, u64 
     T scalar = 10000.0 * (1LL << scale);
     attention_mask(_in, scalar, y);
     softmax(y, _out, scale);
+
 }
 
 template <typename T>
@@ -363,11 +302,10 @@ void FloatClearText<T>::layernorm(const Tensor1D<T> &A, const Tensor1D<T> &B, co
     always_assert(A.d1 == B.d1);
     always_assert(A.d1 == x.shape.back());
     always_assert(x.is_same_shape(y));
-
+    
     u64 channels = x.shape.back();
 
-    fastfor(x.size() / channels, [&](u64 i)
-            {
+    fastfor(x.size() / channels, [&](u64 i) {
         T mean = 0;
         T var = 0;
         for (u64 j = 0; j < channels; j++) {
@@ -383,26 +321,30 @@ void FloatClearText<T>::layernorm(const Tensor1D<T> &A, const Tensor1D<T> &B, co
 
         for (u64 j = 0; j < channels; j++) {
             y.data[i * channels + j] = (x.data[i * channels + j] - mean) / std::sqrt(var);
-        } });
+        }
+    });
 
-    fastfor(x.size(), [&](u64 i)
-            { y.data[i] = y.data[i] * A(i % channels) + B(i % channels); });
+    fastfor(x.size(), [&](u64 i) {
+        y.data[i] = y.data[i] * A(i % channels) + B(i % channels);
+    });
 }
 
 template <typename T>
 void FloatClearText<T>::addbias(Tensor<T> &x, const Tensor1D<T> &bias)
 {
     always_assert(x.shape.back() == bias.d1);
-    fastfor(x.size(), [&](u64 i)
-            { x.data[i] += bias(i % bias.d1); });
+    fastfor(x.size(), [&](u64 i) {
+        x.data[i] += bias(i % bias.d1);
+    });
 }
 
 template <typename T>
 void FloatClearText<T>::scalarmul(Tensor<T> &x, T scalar, Tensor<T> &y)
 {
     always_assert(x.is_same_shape(y));
-    fastfor(x.size(), [&](u64 i)
-            { y.data[i] = x.data[i] * scalar; });
+    fastfor(x.size(), [&](u64 i) {
+        y.data[i] = x.data[i] * scalar;
+    });
 }
 
 template <typename T>
@@ -416,33 +358,178 @@ void FloatClearText<T>::attention_mask(Tensor<T> &x, T scalar, Tensor<T> &y)
     auto y_2d = y.as_2d();
     auto x_2d = x.as_2d();
 
-    for (u64 j = 0; j < n_seq; ++j)
-    {
-        for (u64 k = 0; k < j + 1; ++k)
-        {
+    for (u64 j = 0; j < n_seq; ++j) {
+        for (u64 k = 0; k < j + 1; ++k) {
             y_2d(j, k) = x_2d(j, k);
         }
-        for (u64 k = j + 1; k < n_seq; ++k)
-        {
+        for (u64 k = j + 1; k < n_seq; ++k) {
             y_2d(j, k) = x_2d(j, k) - scalar;
         }
     }
+
+}
+
+template <typename T>
+void FloatClearText<T>::local_attention_mask(Tensor<T> &x, T scalar, Tensor<T> &y)
+{
+    always_assert(x.is_same_shape(y));
+    always_assert(x.shape.size() == 2);
+    always_assert(x.shape[0] == x.shape[1]);
+
+    u64 n_seq = x.shape[0];
+    auto y_2d = y.as_2d();
+    auto x_2d = x.as_2d();
+    u64 window_size = 256;
+
+    for (u64 j = 1; j <= n_seq - 1 ; ++j) {
+        for (u64 k = 0; k < n_seq - j; ++k) {
+            y_2d(k, k+j) = x_2d(k, k+j) - scalar;
+        }
+    }
+
+    for (u64 j = 0; j <= window_size -1 ; ++j) {
+        for (u64 k = j; k < n_seq; ++k) {
+            y_2d(k, k-j) = x_2d(k, k-j);
+        }
+    }
+
+    for (u64 j = window_size; j <= n_seq -1 ; ++j) {
+        for (u64 k = j; k < n_seq; ++k) {
+            y_2d(k, k-j) = x_2d(k, k-j) - scalar;
+        }
+    }
+
 }
 
 template <typename T>
 void FloatClearText<T>::tanh(const Tensor<T> &in, const Tensor<T> &out, u64 scale)
 {
-    fastfor(in.size(), [&](u64 i)
-            { out.data[i] = std::tanh(in.data[i]); });
+    fastfor(in.size(), [&](u64 i) {
+        out.data[i] = std::tanh(in.data[i]);
+    });
 }
 
 template <typename T>
 void FloatClearText<T>::scalardiv(Tensor<T> &in, double scalar, Tensor<T> &out, u64 scale, u64 mode)
 {
     always_assert(scale == 0);
-    fastfor(in.size(), [&](u64 i)
-            { out.data[i] = in.data[i] / scalar; });
+    fastfor(in.size(), [&](u64 i) {
+        out.data[i] = in.data[i] / scalar;
+    });
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+void FloatClearText<T>::mul(const Tensor<T> &a, const Tensor<T> &b, Tensor<T> &out)
+{
+    always_assert(a.is_same_shape(b));
+    always_assert(a.is_same_shape(out));
+
+    fastfor(a.size(), [&](u64 i) {
+        out.data[i] = a.data[i] * b.data[i];
+    });
+}
+
+template <typename T>
+void FloatClearText<T>::sin(const Tensor<T> &in, const Tensor<T> &out, u64 scale)
+{
+    fastfor(in.size(), [&](u64 i) {
+        out.data[i] = std::sin(in.data[i]);
+    });
+}
+
+template <typename T>
+void FloatClearText<T>::cos(const Tensor<T> &in, const Tensor<T> &out, u64 scale)
+{
+    fastfor(in.size(), [&](u64 i) {
+        out.data[i] = std::cos(in.data[i]);
+    });
+}
+
+template <typename T>
+void FloatClearText<T>::rmsnorm(const Tensor1D<T> &A, const Tensor1D<T> &B, const Tensor<T> &x, Tensor<T> &y, u64 scale)
+{
+    always_assert(A.d1 == B.d1);
+    always_assert(A.d1 == x.shape.back());
+    always_assert(x.is_same_shape(y));
+    
+    u64 channels = x.shape.back();
+
+    fastfor(x.size() / channels, [&](u64 i) {
+        T var = 0;
+
+        for (u64 j = 0; j < channels; j++) {
+            var += (x.data[i * channels + j]) * (x.data[i * channels + j]);
+        }
+
+        var = var / T(channels);
+
+        for (u64 j = 0; j < channels; j++) {
+            y.data[i * channels + j] = (x.data[i * channels + j]) / std::sqrt(var);
+        }
+    });
+
+    fastfor(x.size(), [&](u64 i) {
+        y.data[i] = y.data[i] * A(i % channels) + B(i % channels);
+    });
+}
+
+template <typename T>
+void FloatClearText<T>::rotate_half(Tensor<T> &x, Tensor<T> &y)
+{
+    always_assert(x.is_same_shape(y));
+
+    u64 channels = x.shape.back();
+
+    fastfor(x.size() / channels, [&](u64 i) {
+        u64 ind = 0;
+
+        for (u64 j = channels / 2; j < channels; j++) {
+            y.data[i * channels + ind] = -x.data[i * channels + j];
+            ind++ ;
+        }
+
+        for (u64 j = 0; j < channels / 2; j++) {
+            y.data[i * channels + ind] = x.data[i * channels + j];
+            ind++ ;
+        }
+    });
+}
+
+template <typename T>
+void FloatClearText<T>::rotary_embedding_before_sin_cos(Tensor<T> &x, Tensor<T> &y, u64 scale, u64 max_position_embeddings, u64 base)
+{
+    always_assert(x.is_same_shape(y));
+    // always_assert(x.shape[-2] <= max_position_embeddings);
+
+    u64 n_seq = x.shape[0];
+    u64 dim = x.shape[1];
+    auto y_2d = y.as_2d();
+    auto x_2d = x.as_2d();
+
+    for (u64 i = 0; i < n_seq; ++i) {
+        u64 ind = 0;
+        for (u64 j = 0; j < dim; j+=2) {
+            double scalar = 1.0 / (std::pow(base, (double)j/dim));
+            y_2d(i, ind) = i * scalar;
+            y_2d(i, ind + dim/2) = y_2d(i, ind);
+            ind++ ;
+        }
+    }
+}
+
+template <typename T>
+void FloatClearText<T>::silu(const Tensor<T> &in, const Tensor<T> &out, u64 scale, u64 mode)
+{
+    always_assert(scale == 0);
+    fastfor(in.size(), [&](u64 i) {
+        T x = in.data[i];
+        out.data[i] = x / (1 + std::exp(-x));
+    });
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template class FloatClearText<double>;
 template class FloatClearText<float>;

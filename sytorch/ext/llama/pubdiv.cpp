@@ -75,7 +75,7 @@ std::pair<ARSKeyPack, ARSKeyPack> keyGenARS(int Bin, int Bout, uint64_t shift, G
     uint64_t ones = ((uint64_t)1 << shift) - 1;
     GroupElement alpha_s = y & ones;
 
-    // std::cout << "keygen alpha_n (dualdcf alpha) " << alpha_n << " alpha_s (dcf alpha)" << alpha_s << "\n";
+    // std::cout << "keygen alpha_n (dualdcf alpha) " << alpha_n << " alpha_s (dcf alpha)" << alpha_s << std::endl;
 
     if (!LlamaConfig::stochasticT) {
         auto dcfKeys = keyGenDCF(shift, Bout, alpha_s, 1);
@@ -113,7 +113,7 @@ GroupElement evalARS(int party, GroupElement x, uint64_t shift, const ARSKeyPack
     uint8_t x_msb = msb(x, k.Bin);
     // todo: bitsize of x_n should have been k.Bin - 1
     uint64_t x_n = x & (((uint64_t)1 << (k.Bin - 1)) - 1);
-    // std::cout << "x_n " << x_n << "\n";
+    // std::cout << "x_n " << x_n << std::endl;
 
     GroupElement dcfIdx = ((uint64_t)1 << shift) - x_s - 1;
     // GroupElement t_s = evalDCF(party, dcfIdx, k.dcfKey);
@@ -138,4 +138,90 @@ GroupElement evalARS(int party, GroupElement x, uint64_t shift, const ARSKeyPack
     }
 
     return res; 
+}
+
+std::pair<EdabitsPrTruncKeyPack, EdabitsPrTruncKeyPack> keyGenEdabitsPrTrunc(int bw, int shift, GroupElement rin, GroupElement rout)
+{
+    GroupElement a = 0;
+    mod(rin, bw);
+
+    if (rin & (1ULL << (bw - 1)))
+    {
+        a = 1;
+    }
+    GroupElement b = rin >> shift;
+    mod(b, bw - shift - 1);
+    b = rout - b;
+    mod(b, bw);
+    auto a_split = splitShare(a, bw);
+    auto b_split = splitShare(b, bw);
+    EdabitsPrTruncKeyPack k0, k1;
+    k0.a = a_split.first; k1.a = a_split.second;
+    k0.b = b_split.first; k1.b = b_split.second;
+    
+    return std::make_pair(k0, k1);
+}
+
+std::pair<TruncateReduceKeyPack, TruncateReduceKeyPack> keyGenTruncateReduce(int bin, int shift, GroupElement rin, GroupElement rout)
+{
+    GroupElement r1 = rin >> shift;
+    mod(r1, bin - shift);
+    GroupElement r0 = rin;
+    mod(r0, shift);
+
+    auto dcfKeys = keyGenDCF(shift, bin - shift, r0, 1);
+    auto rout_split = splitShare(rout - r1, bin - shift);
+
+    TruncateReduceKeyPack k0, k1;
+    k0.bin = bin; k1.bin = bin;
+    k0.shift = shift; k1.shift = shift;
+    k0.dcfKey = dcfKeys.first; k1.dcfKey = dcfKeys.second;
+    k0.rout = rout_split.first; k1.rout = rout_split.second;
+
+    return std::make_pair(k0, k1);
+}
+
+GroupElement evalTruncateReduce(int party, GroupElement x, const TruncateReduceKeyPack &k)
+{
+    GroupElement x0 = x;
+    mod(x0, k.shift);
+    GroupElement x1 = x >> k.shift;
+    mod(x1, k.bin - k.shift);
+
+    GroupElement t;
+    evalDCF(party, &t, x0, k.dcfKey);
+
+    return party * x1 - t + k.rout;
+}
+
+std::pair<SlothLRSKeyPack, SlothLRSKeyPack> keyGenSlothLRS(int bin, int shift, GroupElement rin, GroupElement rinWrap, GroupElement rout)
+{
+    SlothLRSKeyPack k0, k1;
+    k0.bin = bin; k1.bin = bin;
+    k0.shift = shift; k1.shift = shift;
+
+    mod(rin, bin);
+    mod(rinWrap, 1);
+    GroupElement r = rout - (rin >> shift);
+    GroupElement msb = (1LL << (bin - shift)) * ((rin >> (bin - 1)) & 1);
+
+    auto rout_split = splitShare(r, bin);
+    k0.rout = rout_split.first; k1.rout = rout_split.second;
+
+    auto msb_split = splitShare(msb, bin);
+    k0.msb = msb_split.first; k1.msb = msb_split.second;
+
+    auto select_split = splitShare(rinWrap, bin);
+    k0.select = select_split.first; k1.select = select_split.second;
+
+    return std::make_pair(k0, k1);
+}
+
+GroupElement evalSlothLRS(int party, GroupElement x, GroupElement w, const SlothLRSKeyPack &key)
+{
+    mod(x, key.bin);
+    mod(w, 1);
+    GroupElement msb = (x >> (key.bin - 1)) & 1;
+    // return party * (x >> key.shift) + key.rout + key.msb * (1 - msb) - (1 - w) * key.select - w * (party - key.select);
+    return party * (x >> key.shift) + key.rout + key.msb * (1 - msb) - key.select - w * party + 2 * w * key.select;
 }

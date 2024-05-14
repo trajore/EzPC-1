@@ -1,24 +1,3 @@
-"""
-Authors: Saksham Gupta.
-Copyright:
-Copyright (c) 2021 Microsoft Research
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 import os, sys
 
 import onnx.checker
@@ -110,7 +89,7 @@ class IR(Backend):
             logger.error("Model Not Supported")
             sys.exit()
 
-        if backend in ["CLEARTEXT_LLAMA", "LLAMA", "CLEARTEXT_fp"]:
+        if backend in ["CLEARTEXT_LLAMA", "LLAMA"]:
             weights_path = optimizations.dump_model_weights_as_dat(
                 model, model_abs_dir, model_name
             )
@@ -143,7 +122,6 @@ class IR(Backend):
         not_supported = []
         implemented_sytorch = [
             "Relu",
-            "LeakyRelu",
             "Softmax",
             "Conv",
             "MaxPool",
@@ -155,7 +133,6 @@ class IR(Backend):
             "GlobalAveragePool",
             "Add",
             "ConvTranspose",
-            "Transpose",
         ]
         implemented_secfloat = [
             "Relu",
@@ -174,7 +151,7 @@ class IR(Backend):
         ]
         if backend in ["SECFLOAT", "SECFLOAT_CLEARTEXT"]:
             implemented = implemented_secfloat
-        elif backend in ["CLEARTEXT_LLAMA", "LLAMA", "CLEARTEXT_fp"]:
+        elif backend in ["CLEARTEXT_LLAMA", "LLAMA"]:
             implemented = implemented_sytorch
         for node in model.graph.node:
             if node.op_type not in implemented:
@@ -226,7 +203,7 @@ class IR(Backend):
         program = process_output_nodes(program, model.graph, var_dict)
         logger.info("Reading Onnx file completed.")
 
-        program = optimizations.relu_maxpool_optimiser(program, value_info)
+        program = optimizations.relu_maxpool_optimiser(program)
         logger.info("Relu Maxpool Optimisation Done.")
 
         # Works only if debugging is on
@@ -240,7 +217,7 @@ class IR(Backend):
             backend_rep = FzpcBackendRep(
                 program, value_info, var_dict, path, file_name[:-5], backend
             )
-        elif backend in ["CLEARTEXT_LLAMA", "LLAMA", "CLEARTEXT_fp"]:
+        elif backend in ["CLEARTEXT_LLAMA", "LLAMA"]:
             backend_rep = SytorchBackendRep(
                 program, value_info, var_dict, path, file_name[:-5]
             )

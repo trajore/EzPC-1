@@ -11,7 +11,6 @@ In the above command, the paths are not local, but are the locations on the resp
 - `-b <backend>`: the MPC backend to use (default: `LLAMA`)
 - `-scale <scale>`: the scaling factor for the model input (default: `15`)
 - `-bl <bitlength>`: the bitlength to use for the MPC computation (default: `40`)
-- `-nt <numthreads>`: the number of threads to use for MPC computation (default: `4`)
 
 The script generates 4 scripts:
 
@@ -28,7 +27,7 @@ Using the above instructions, we now demonstrate LeNet inference on MNIST images
 
 ```
 sudo apt update
-sudo apt install libeigen3-dev cmake build-essential git zip
+sudo apt install libeigen3-dev cmake build-essential git
 ```
 
 2. On both machines, install the python dependencies in a virtual environment.
@@ -64,8 +63,8 @@ cd tmp
 
 ```
 git clone https://github.com/mpc-msri/EzPC
-cd EzPC/sytorch
-chmod +x ezpc-cli.sh
+cd EzPC
+cd sytorch
 ./ezpc-cli.sh -m /home/<user>/lenet-demo-server/lenet.onnx -preprocess /home/<user>/lenet-demo-server/preprocess.py -s <SERVER-IP> -i /home/<user>/lenet-demo-client/input.jpg
 scp server-offline.sh <SERVER-IP>:/home/<user>/lenet-demo-server/tmp/
 scp server-online.sh  <SERVER-IP>:/home/<user>/lenet-demo-server/tmp/
@@ -93,34 +92,6 @@ chmod +x client-offline.sh client-online.sh
 
 (on client)
 ./client-online.sh
-```
-8. For Using Ramdisk, follow the steps below:
-```
-# Enable and mount Ramdisk on client and server machines
-./ramdrive.sh <ramdisk_size>
-
-ramdisk_size >= sum of sizes of server and client keys.
-(example)
-Lenet server key size = 9.5 MB
-Lenet client key size = 9.5 MB
-Lenet Total key size = 19 MB
-So, ramdisk_size >= 19 MB
-
-command: ./ramdrive.sh 20m
-
-chexpert server key size = 87.5 GB
-chexpert client key size = 87.5 GB
-chexpert Total key size = 175 GB
-So ramdisk_size >= 175 GB
-
-command: ./ramdrive.sh 200g
-
-//change the server and client.sh scripts to use ramdisk 
- ./lenet_LLAMA_15 1  ->> ./lenet_LLAMA_15 1 4 true
-// sed command to be added.
-
-# Disable and unmount Ramdisk on client and server machines after inference
-./unmount_ramdrive.sh
 ```
 
 In this particular example, you should get a score array of `[-2.71362 1.06747 4.43045 0.795044 -3.21173 -2.39871 -8.49094 10.3443 1.0567 -0.694458]`, which is maximum at index 7, which is indeed expected as the [input.jpg](https://github.com/kanav99/models/raw/main/input.jpg) file contains an image of handwritten 7.

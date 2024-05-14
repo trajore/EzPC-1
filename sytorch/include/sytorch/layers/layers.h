@@ -104,6 +104,18 @@ public:
         for(auto &i : a) {
             i->graphNode->incrementAndGc();
         }
+        // if (true) {
+        //     Tensor<T> tmp(activation.shape);
+        //     tmp.copy(activation, false);
+        //     backend->output(tmp);
+        //     if (true)
+        //     {
+        //         std::cout << name << " ";
+        //         tmp.print();
+        //         // std::cout << name << "->FirstElement = " << tmp.data[0] << std::endl;
+        //     }
+        // }
+        
         return activation;
     }
 
@@ -294,8 +306,8 @@ public:
 
     void _forward(Tensor<T> &a) {
         always_assert(a.shape.size() == 4);
-        auto act_4d = this->activation.as_4d();
         auto a_4d = a.as_4d();
+        auto act_4d = this->activation.as_4d();
         this->backend->avgPool2D(ks, padding, stride, a_4d, act_4d, this->scale);
     }
 
@@ -511,36 +523,6 @@ public:
 };
 
 template <typename T>
-class LeakyReLU : public Layer<T>
-{
-public:
-    Tensor<T> drelu;
-    double alpha;
-    LeakyReLU(double alpha) : Layer<T>("LeakyReLU"), drelu({0}), alpha(alpha) {}
-
-    void _resize(const std::vector<std::vector<u64>> &shapes)
-    {
-        always_assert(shapes.size() == 1);
-        auto &shape = shapes[0];
-        this->drelu.resize(shape);
-        always_assert(this->alpha >= 0.0);
-    }
-
-    void _forward(Tensor<T> &a)
-    {
-        T alphaFix = type_cast<T>(alpha * (1LL << this->scale));
-        this->backend->leakyRelu(a, this->activation, this->drelu, this->scale, this->mode, alphaFix);
-    }
-
-    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes)
-    {
-        always_assert(inShapes.size() == 1);
-        auto &inShape = inShapes[0];
-        return inShape;
-    }
-};
-
-template <typename T>
 class BatchNormInference : public Layer<T> {
 public:
     Tensor1D<T> A; // scale = s
@@ -703,83 +685,6 @@ public:
 };
 
 template <typename T>
-class ConvTranspose2D : public Layer<T>
-{
-public:
-    Tensor2D<T> filter;
-    Tensor1D<T> bias;
-    u64 ci, co;
-    u64 fh, fw;
-    u64 ph, pw;
-    u64 sh, sw;
-
-    ConvTranspose2D(u64 ci, u64 co, u64 f, u64 padding = 0, u64 stride = 1, bool useBias = false) : Layer<T>("ConvTranspose2D"), ci(ci), co(co), fh(f), fw(f),
-                                                                                                    ph(padding), pw(padding), sh(stride), sw(stride), filter(co, f * f * ci), bias(co)
-    {
-        this->doTruncationForward = true;
-        this->useBias = useBias;
-    }
-
-    ConvTranspose2D(u64 ci, u64 co, const std::array<u64, 2> f, u64 padding = 0, u64 stride = 1, bool useBias = false) : Layer<T>("ConvTranspose2D"), ci(ci), co(co), fh(f[0]), fw(f[1]),
-                                                                                                                         ph(padding), pw(padding), sh(stride), sw(stride), filter(co, f[0] * f[1] * ci), bias(co)
-    {
-        this->doTruncationForward = true;
-        this->useBias = useBias;
-    }
-
-    ConvTranspose2D(u64 ci, u64 co, const std::array<u64, 2> f, const std::array<u64, 4> padding = {0, 0, 0, 0}, const std::array<u64, 2> stride = {1, 1}, const std::array<u64, 2> dialation = {1, 1}, bool useBias = false) : Layer<T>("ConvTranspose2D"), ci(ci), co(co), fh(f[0]), fw(f[1]),
-                                                                                                                                                                                                                                ph(padding[0]), pw(padding[1]), sh(stride[0]), sw(stride[1]), filter(co, f[0] * f[1] * ci), bias(co)
-    {
-        always_assert(dialation[0] == 1);
-        always_assert(dialation[1] == 1);
-        always_assert(padding[2] == padding[0]);
-        always_assert(padding[3] == padding[1]);
-        this->doTruncationForward = true;
-        this->useBias = useBias;
-    }
-
-    void _initScale(u64 scale)
-    {
-        double xavier = 1.0 / sqrt(ci * fh * fw);
-        filter.randomize(xavier * (1ULL << scale));
-        if (this->useBias)
-            bias.randomize(xavier * (1ULL << (2 * scale)));
-    }
-
-    void _resize(const std::vector<std::vector<u64>> &shapes)
-    {
-        always_assert(shapes.size() == 1);
-        auto &shape = shapes[0];
-        always_assert(shape.size() == 4);
-        always_assert(shape[3] == ci);
-    }
-
-    void _forward(Tensor<T> &a)
-    {
-        always_assert(a.shape.size() == 4);
-        assert(a.shape[3] == ci);
-        auto act_4d = this->activation.as_4d();
-        this->backend->convTranspose2D(fh, fw, ph, pw, sh, sw, ci, co, a.as_4d(), filter, act_4d);
-        if (this->useBias)
-            this->backend->addbias(this->activation, bias);
-    }
-
-    TensorRef<T> getweights() { return filter.ref(); }
-    TensorRef<T> getbias() { return bias.ref(); }
-
-    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes)
-    {
-        always_assert(inShapes.size() == 1);
-        auto &inShape = inShapes[0];
-        always_assert(inShape.size() == 4);
-        always_assert(inShape[3] == ci);
-        u64 newH = (((inShape[1] - 1) * sh + fh - 2 * ph));
-        u64 newW = (((inShape[2] - 1) * sw + fw - 2 * pw));
-        return {inShape[0], newH, newW, co};
-    }
-};
-
-template <typename T>
 class PlaceHolderLayer : public Layer<T> {
 public:
     PlaceHolderLayer(const std::string &s) : Layer<T>(s) {
@@ -859,7 +764,7 @@ public:
             sz += t->size();
         }
 
-        //#pragma omp parallel for
+        #pragma omp parallel for
         for(int i = 0; i < sz; ++i)
         {
             u64 l = i % outchannels;
@@ -906,7 +811,27 @@ public:
     }
 
     void _forward(Tensor<T> &a) {
-        this->backend->gelu(a, this->activation, this->scale);
+        this->backend->gelu(a, this->activation, this->scale, this->mode);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class SiLU: public Layer<T> {
+public:
+    SiLU() :  Layer<T>("SiLU") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->silu(a, this->activation, this->scale, this->mode);
     }
 
     std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
@@ -927,13 +852,37 @@ public:
     }
 
     void _forward(Tensor<T> &a) {
-        this->backend->softmax(a, this->activation, this->scale);
+        this->backend->softmax(a, this->activation, this->scale, this->mode);
     }
 
     std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
         always_assert(inShapes.size() == 1);
         always_assert(inShapes[0].size() == 2);
         auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class SoftMaxTriangular: public Layer<T> {
+public:
+    SoftMaxTriangular() :  Layer<T>("SoftMaxTriangular") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+        always_assert(shapes[0].size() == 2);
+        always_assert(shapes[0][0] == shapes[0][1]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->softmax_triangular(a, this->activation, this->scale, this->mode);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        always_assert(inShapes[0].size() == 2);
+        auto &inShape = inShapes[0];
+        always_assert(inShape[0] == inShape[1]);
         return inShape;
     }
 };
@@ -947,7 +896,6 @@ public:
     LayerNorm(u64 channels) : Layer<T>("LayerNorm"), A(channels), B(channels) {
         this->A.fill(0);
         this->B.fill(0);
-        this->doTruncationForward = true;
     }
 
     void _resize(const std::vector<std::vector<u64>> &shapes) {
@@ -960,6 +908,42 @@ public:
         // always_assert(a.shape.size() == 4);
         assert(a.shape.back() == this->A.d1);
         this->backend->layernorm(this->A, this->B, a, this->activation, this->scale);
+    }
+
+    TensorRef<T> getweights() { return A.ref(); }
+    TensorRef<T> getbias() { return B.ref(); }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        always_assert(inShape.back() == this->A.d1);
+        return inShape;
+    }
+};
+
+template <typename T>
+class RMSNorm: public Layer<T> {
+public:
+    Tensor1D<T> A; // scale = s
+    Tensor1D<T> B; // scale = 2s
+
+    RMSNorm(u64 channels, bool useBias = false) : Layer<T>("RMSNorm"), A(channels), B(channels) {
+        this->A.fill(0);
+        this->B.fill(0);
+        this->doTruncationForward = true;
+        this->useBias = useBias;
+    }
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+        auto &shape = shapes[0];
+        always_assert(shape.back() == this->A.d1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        // always_assert(a.shape.size() == 4);
+        assert(a.shape.back() == this->A.d1);
+        this->backend->rmsnorm(this->A, this->B, a, this->activation, this->scale);
     }
 
     TensorRef<T> getweights() { return A.ref(); }
@@ -991,7 +975,7 @@ public:
         u64 split_size = a.shape.back() / n_splits; // 3
         u64 rest_size = a.size() / a.shape.back(); // 2
         
-        //#pragma omp parallel for
+        #pragma omp parallel for
         for(u64 i = 0; i < a.size(); ++i) {
             u64 p = i / a.shape.back();
             u64 q = i % a.shape.back();
@@ -1045,98 +1029,29 @@ public:
 template <typename T>
 class Transpose: public Layer<T> {
 public:
-    std::vector<u64> perm;
-    Transpose(const std::vector<u64> &perm) : Layer<T>("Transpose"), perm(perm) {}
+    Transpose() :  Layer<T>("Transpose") {}
 
     void _resize(const std::vector<std::vector<u64>> &shapes) {
         always_assert(shapes.size() == 1);
         auto &shape = shapes[0];
-        always_assert(shape.size() >= 2);
+        always_assert(shape.size() == 2);
     }
 
     void _forward(Tensor<T> &a) {
-        if (a.shape.size() == 2)
-        {
-#pragma omp parallel for collapse(2)
-            for (u64 i = 0; i < a.shape[0]; ++i)
-            {
-                for (u64 j = 0; j < a.shape[1]; ++j)
-                {
-                    this->activation.data[j * a.shape[perm[1]] + i] = a.data[i * a.shape[1] + j];
-                }
+        always_assert(a.shape.size() == 2);
+        #pragma omp parallel for collapse(2)
+        for (u64 i = 0; i < a.shape[0]; ++i) {
+            for (u64 j = 0; j < a.shape[1]; ++j) {
+                this->activation.data[j * a.shape[0] + i] = a.data[i * a.shape[1] + j];
             }
-        }
-        else if (a.shape.size() == 4)
-        {
-            auto a_4d = a.as_4d();
-            auto out_4d = this->activation.as_4d();
-#pragma omp parallel for collapse(4)
-            for (int n = 0; n < a.shape[0]; ++n)
-            {
-                for (int h = 0; h < a.shape[1]; ++h)
-                {
-                    for (int w = 0; w < a.shape[2]; ++w)
-                    {
-                        for (int c = 0; c < a.shape[3]; ++c)
-                        {
-                            out_4d(perm[0] == 0 ? n : (perm[0] == 1 ? h : (perm[0] == 2 ? w : c)),
-                                   perm[1] == 0 ? n : (perm[1] == 1 ? h : (perm[1] == 2 ? w : c)),
-                                   perm[2] == 0 ? n : (perm[2] == 1 ? h : (perm[2] == 2 ? w : c)),
-                                   perm[3] == 0 ? n : (perm[3] == 1 ? h : (perm[3] == 2 ? w : c))) = a_4d(n, h, w, c);
-                        }
-                    }
-                }
-            }
-        }
-        else if (a.shape.size() == 5)
-        {
-            auto a_5d = a.as_5d();
-            auto out_5d = this->activation.as_5d();
-#pragma omp parallel for collapse(5)
-            for (int n = 0; n < a.shape[0]; ++n)
-            {
-                for (int h = 0; h < a.shape[1]; ++h)
-                {
-                    for (int w = 0; w < a.shape[2]; ++w)
-                    {
-                        for (int d = 0; d < a.shape[3]; ++d)
-                        {
-                            for (int c = 0; c < a.shape[4]; ++c)
-                            {
-                                out_5d(perm[0] == 0 ? n : (perm[0] == 1 ? h : (perm[0] == 2 ? w : (perm[0] == 3 ? d : c))),
-                                       perm[1] == 0 ? n : (perm[1] == 1 ? h : (perm[1] == 2 ? w : (perm[1] == 3 ? d : c))),
-                                       perm[2] == 0 ? n : (perm[2] == 1 ? h : (perm[2] == 2 ? w : (perm[2] == 3 ? d : c))),
-                                       perm[3] == 0 ? n : (perm[3] == 1 ? h : (perm[3] == 2 ? w : (perm[3] == 3 ? d : c))),
-                                       perm[4] == 0 ? n : (perm[4] == 1 ? h : (perm[4] == 2 ? w : (perm[4] == 3 ? d : c)))) = a_5d(n, h, w, d, c);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            throw std::runtime_error("supported only 2d, 4d, 5d tensors in transpose");
         }
     }
 
     std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
         always_assert(inShapes.size() == 1);
         auto shape = inShapes[0];
-        always_assert(perm.size() == shape.size());
-        for (auto &p : perm)
-        {
-            if (p == 1)
-                p = shape.size() - 1;
-            else if (p > 1)
-                p -= 1;
-        }
-        std::vector<u64> outShape;
-        for (auto &p : perm)
-        {
-            outShape.push_back(shape[p]);
-        }
-        return outShape;
+        always_assert(shape.size() == 2);
+        return {shape[1], shape[0]};
     }
 };
 
@@ -1181,6 +1096,46 @@ public:
     }
 };
 
+template <typename T>
+class _MatMulTriangular: public Layer<T> {
+public:
+    _MatMulTriangular() :  Layer<T>("_MatMulTriangular") {
+        this->doTruncationForward = true;
+    }
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 2);
+        auto &shape0 = shapes[0];
+        auto &shape1 = shapes[1];
+        always_assert(shape0.size() == 2);
+        always_assert(shape1.size() == 2);
+        always_assert(shape0[1] == shape1[0]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        throw std::runtime_error("single input not allowed in matmul");
+    }
+
+    void _forward(std::vector<Tensor<T> *> &a) {
+        always_assert(a.size() == 2);
+        auto &a0 = *a[0];
+        auto a0_2d = a0.as_2d();
+        auto &a1 = *a[1];
+        auto a1_2d = a1.as_2d();
+        auto act_2d = this->activation.as_2d();
+        this->backend->matmul_triangular(a0_2d, a1_2d, act_2d);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 2);
+        auto &shape0 = inShapes[0];
+        auto &shape1 = inShapes[1];
+        always_assert(shape0.size() == 2);
+        always_assert(shape1.size() == 2);
+        always_assert(shape0[1] == shape1[0]);
+        return {shape0[0], shape1[1]};
+    }
+};
 
 template <typename T>
 class _ScalarMul: public Layer<T> {
@@ -1204,5 +1159,341 @@ public:
         always_assert(inShapes.size() == 1);
         auto &shape0 = inShapes[0];
         return shape0;
+    }
+};
+
+template <typename T>
+class AttentionMask: public Layer<T> {
+public:
+    double scalar;
+
+    AttentionMask(double scalar) :  Layer<T>("AttentionMask"), scalar(scalar) {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+        auto shape = shapes[0];
+        always_assert(shape.size() == 2);
+        always_assert(shape[0] == shape[1]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        T scalarFix = scalar * (1LL << this->scale);
+        this->backend->attention_mask(a, scalarFix, this->activation);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto shape = inShapes[0];
+        always_assert(shape.size() == 2);
+        always_assert(shape[0] == shape[1]);
+        return shape;
+    }
+};
+
+template <typename T>
+class LocalAttentionMask: public Layer<T> {
+public:
+    double scalar;
+    // u64 window_size;
+
+    LocalAttentionMask(double scalar) :  Layer<T>("LocalAttentionMask"), scalar(scalar) {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+        auto shape = shapes[0];
+        always_assert(shape.size() == 2);
+        always_assert(shape[0] == shape[1]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        T scalarFix = scalar * (1LL << this->scale);
+        this->backend->local_attention_mask(a, scalarFix, this->activation);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto shape = inShapes[0];
+        always_assert(shape.size() == 2);
+        always_assert(shape[0] == shape[1]);
+        return shape;
+    }
+};
+
+template <typename T>
+class _Tanh: public Layer<T> {
+public:
+    _Tanh() :  Layer<T>("_Tanh") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->tanh(a, this->activation, this->scale);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class Unsqueeze: public Layer<T> {
+public:
+    Unsqueeze() :  Layer<T>("Unsqueeze") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        u64 sz = a.size();
+        for (u64 i = 0; i < sz; i++) {
+            this->activation.data[i] = a.data[i];
+        }
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto inShape = inShapes[0];
+        inShape.insert(inShape.begin(), 1);
+        return inShape;
+    }
+};
+
+template <typename T>
+class AttentionTriangular: public Layer<T> {
+public:
+    u64 n_heads;
+    AttentionTriangular(u64 n_heads) :  Layer<T>("AttentionTriangular"), n_heads(n_heads) {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 3);
+        auto &shape0 = shapes[0];
+        auto &shape1 = shapes[1];
+        auto &shape2 = shapes[2];
+        always_assert(shape0.size() == 2);
+        always_assert(shape1.size() == 2);
+        always_assert(shape2.size() == 2);
+        auto n_seq = shape0[0];
+        auto n_embd = shape0[1];
+        always_assert(shape1[0] == n_seq);
+        always_assert(shape1[1] == n_embd);
+        always_assert(shape2[0] == n_seq);
+        always_assert(shape2[1] == n_embd);
+    }
+
+    void _forward(Tensor<T> &a) {
+        throw std::runtime_error("single input not allowed in AttentionTriangular");
+    }
+
+    void _forward(std::vector<Tensor<T> *> &a) {
+        always_assert(a.size() == 3);
+        auto &q = *a[0];
+        auto q_2d = q.as_2d();
+        auto &k = *a[1];
+        auto k_2d = k.as_2d();
+        auto &v = *a[2];
+        auto v_2d = v.as_2d();
+        auto act_2d = this->activation.as_2d();
+        this->backend->attention_triangular(q_2d, k_2d, v_2d, act_2d, this->scale, n_heads);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 3);
+        auto &shape0 = inShapes[0];
+        auto &shape1 = inShapes[1];
+        auto &shape2 = inShapes[2];
+        always_assert(shape0.size() == 2);
+        always_assert(shape1.size() == 2);
+        always_assert(shape2.size() == 2);
+        auto n_seq = shape0[0];
+        auto n_embd = shape0[1];
+        always_assert(shape1[0] == n_seq);
+        always_assert(shape1[1] == n_embd);
+        always_assert(shape2[0] == n_seq);
+        always_assert(shape2[1] == n_embd);
+        return {shape0[0], shape0[1]};
+    }
+};
+
+
+template <typename T>
+class _Mul: public Layer<T> {
+public:
+    _Mul() :  Layer<T>("_Mul") {
+        this->doTruncationForward = true;
+    }
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 2);
+        auto &shape0 = shapes[0];
+        auto &shape1 = shapes[1];
+        always_assert(shape0.size() == shape1.size());
+        for (u64 i = 0; i < shape0.size(); i++) {
+            always_assert(shape0[i] == shape1[i]);
+        }
+    }
+
+    void _forward(Tensor<T> &a) {
+        throw std::runtime_error("single input not allowed in mul");
+    }
+
+    void _forward(std::vector<Tensor<T> *> &a) {
+        always_assert(a.size() == 2);
+        auto &a0 = *a[0];
+        auto &a1 = *a[1];
+        this->backend->mul(a0, a1, this->activation);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 2);
+        auto &shape0 = inShapes[0];
+        auto &shape1 = inShapes[1];
+        always_assert(shape0.size() == shape1.size());
+        for (u64 i = 0; i < shape0.size(); i++) {
+            always_assert(shape0[i] == shape1[i]);
+        }
+        return shape0;
+    }
+};
+
+
+template <typename T>
+class _MHADummy: public Layer<T> {
+public:
+    _MHADummy() :  Layer<T>("_MHADummy") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->tanh(a, this->activation, this->scale);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class _ScalarDiv: public Layer<T> {
+public:
+    double scalar;
+
+    _ScalarDiv(double scalar) :  Layer<T>("_ScalarDiv"), scalar(scalar) {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->scalardiv(a, scalar, this->activation, this->scale, this->mode);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &shape0 = inShapes[0];
+        return shape0;
+    }
+};
+
+
+////////////////////////////////
+
+template <typename T>
+class _Sin: public Layer<T> {
+public:
+    _Sin() :  Layer<T>("_Sin") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->sin(a, this->activation, this->scale);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class _Cos: public Layer<T> {
+public:
+    _Cos() :  Layer<T>("_Cos") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        always_assert(shapes.size() == 1);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->cos(a, this->activation, this->scale);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        always_assert(inShapes.size() == 1);
+        auto &inShape = inShapes[0];
+        return inShape;
+    }
+};
+
+template <typename T>
+class RotateHalf: public Layer<T> {
+public:
+
+    RotateHalf() :  Layer<T>("RotateHalf") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        // always_assert(shapes.size() == 1);
+        auto shape = shapes[0];
+        // always_assert(shape.size() == 2);
+        // always_assert(shape[0] == shape[1]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->rotate_half(a, this->activation);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        // always_assert(inShapes.size() == 1);
+        auto shape = inShapes[0];
+        // always_assert(shape.size() == 2);
+        // always_assert(shape[0] == shape[1]);
+        return shape;
+    }
+};
+
+template <typename T>
+class RotaryEmbeddingBeforeSinCos: public Layer<T> {
+public:
+
+    RotaryEmbeddingBeforeSinCos() :  Layer<T>("RotaryEmbeddingBeforeSinCos") {}
+
+    void _resize(const std::vector<std::vector<u64>> &shapes) {
+        // always_assert(shapes.size() == 1);
+        auto shape = shapes[0];
+        // always_assert(shape.size() == 2);
+        // always_assert(shape[0] == shape[1]);
+    }
+
+    void _forward(Tensor<T> &a) {
+        this->backend->rotary_embedding_before_sin_cos(a, this->activation, this->scale);
+    }
+
+    std::vector<u64> get_output_dims(const std::vector<std::vector<u64>> &inShapes) {
+        // always_assert(inShapes.size() == 1);
+        auto shape = inShapes[0];
+        // always_assert(shape.size() == 2);
+        // always_assert(shape[0] == shape[1]);
+        return shape;
     }
 };

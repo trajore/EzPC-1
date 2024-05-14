@@ -4,21 +4,8 @@ FSS_CPP_FILE=$1
 EZPC_SRC_PATH=$(dirname $0)
 
 if [ ! -e "$FSS_CPP_FILE" ]; then
-  echo "Please specify file name of the generated .cpp file using OnnxBridge";
+  echo "Please specify file name of the generated .cpp file using CompileONNXGraph.py";
   exit;
-fi
-
-if [ ! -z "$2" ] && [ "$2" != "-Do_Masking" ]; then
-  echo "Invalid 2nd argument"
-  echo "Please specify -Do_Masking as the 2nd argument if you want to enable masking for frontend";
-  exit;
-fi
-
-# Check if 2nd argument is provided
-if [ ! -z "$2" ] && [ "$2" = "-Do_Masking" ]; then
-  mask_flag="add_definitions(-DDo_Masking)";  
-else
-  mask_flag="";
 fi
 
 BINARY_NAME=$(basename $FSS_CPP_FILE .cpp)
@@ -44,14 +31,13 @@ find_package(Threads REQUIRED)
 add_subdirectory($sytorch_dir/ext/cryptoTools $pd/cryptoTools)
 add_subdirectory($sytorch_dir/ext/llama $pd/llama)
 add_executable($BINARY_NAME 
-    ../$FSS_CPP_FILE $sytorch_dir/src/sytorch/random.cpp $sytorch_dir/src/sytorch/backend/cleartext.cpp $sytorch_dir/src/sytorch/backend/float.cpp
+    ../$FSS_CPP_FILE $sytorch_dir/src/sytorch/random.cpp $sytorch_dir/src/sytorch/backend/cleartext.cpp
 )
 target_include_directories($BINARY_NAME
 PUBLIC
     \$<BUILD_INTERFACE:$sytorch_dir/include>
     \$<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}>
 )
-$mask_flag
 target_link_libraries ($BINARY_NAME Eigen3::Eigen Threads::Threads LLAMA cryptoTools)
 " > CMakeLists.txt
 
@@ -60,7 +46,7 @@ make -j4
 rm -rf ../$BINARY_NAME 
 mv $BINARY_NAME ../$DIR
 cd ..
-# rm -rf build_dir
+rm -rf build_dir
 
 
 

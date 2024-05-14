@@ -21,4 +21,9 @@ To do this two scripts are available:
 1. [Single Inference](/sytorch/Toy%20example-%20single%20inference.md) - This script is ideal for a single inference scenario.
 2. [Multiple Inference](/sytorch/Toy%20example-%20multiple%20inference.md) - This script is ideal for multiple inference usecases.
 
+## Sytorch for LLMs:
+Sytorch now supports secure inferencing and validation for LLMs.
+
+[Documentation](/sytorch/LLMs/README.md) - llm with sytorch
+
 

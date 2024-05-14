@@ -4,7 +4,6 @@
 BACKEND="LLAMA"
 SCALE="15"
 BITLENGTH="40"
-NUMTHREADS="4"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]
@@ -46,11 +45,6 @@ do
             shift # past argument
             shift # past value
             ;;
-        -nt|--numthreads)
-            NUMTHREADS="$2"
-            shift # past argument
-            shift # past value
-            ;;
         -preprocess|--preprocess)
             PREPROCESS="$2"
             shift # past argument
@@ -74,7 +68,7 @@ then
     echo "server IP"
     echo "-------------------       --------------" | column -t -s $'\t'
     echo "Usage: $0 -m <full-path/model.onnx> -preprocess <full-path/preprocess_image_file> -s <server-ip>  -d <dealer-ip>"
-    echo "Optional: [-b <backend>] [-scale <scale>] [-bl <bitlength>] [-nt <numthreads>]"
+    echo "Optional: [-b <backend>] [-scale <scale>] [-bl <bitlength>]"
     exit 1
 fi
 
@@ -117,11 +111,10 @@ bg_magenta='\033[0;45m'
 bg_cyan='\033[0;46m'
 clear='\033[0m'
 
-if [ "\$1" = "clean" ]; then
+if [ "$1" = "clean" ]; then
   shopt -s extglob
   echo -e "\${bg_yellow}Cleaning up\${clear}"
-  find . -type f -not -name 'server.sh' -delete
-  find . -type d -not -name 'server.sh' -delete
+  rm -rf !(server.sh)
   echo -e "\${bg_green}Cleaned up\${clear}"
   shopt -u extglob
   exit 0
@@ -178,7 +171,7 @@ while true; do
 
     # Model inference
     echo -e "\${bg_green}Running model inference\${clear}"
-    ./${Model_Name}_${BACKEND}_${SCALE} 2 ${Model_Name}_input_weights.dat ${NUMTHREADS}
+    ./${Model_Name}_${BACKEND}_${SCALE} 2 $SERVER_IP ${Model_Name}_input_weights.dat
     wait
     echo -e "\${bg_green}Model inference completed.\${clear}"
 done
@@ -203,11 +196,10 @@ bg_magenta='\033[0;45m'
 bg_cyan='\033[0;46m'
 clear='\033[0m'
 
-if [ "\$1" = "clean" ]; then
+if [ "$1" = "clean" ]; then
   shopt -s extglob
   echo -e "\${bg_yellow}Cleaning up\${clear}"
-  find . -type f -not -name 'dealer.sh' -delete
-  find . -type d -not -name 'dealer.sh' -delete
+  rm -rf !(dealer.sh)
   echo -e "\${bg_green}Cleaned up\${clear}"
   shopt -u extglob
   exit 0
@@ -281,7 +273,7 @@ mv client.dat client/client.dat
 
 # Key generation and serving key files
 echo -e "\${bg_green}Starting a Python server to serve keys file\${clear}"
-python \$sytorch/scripts/dealer.py $DEALER_IP  
+python \$sytorch/scripts/dealer.py $SERVER_IP 
 
 EOF
 # Finish generating Dealer Script
@@ -304,11 +296,10 @@ bg_magenta='\033[0;45m'
 bg_cyan='\033[0;46m'
 clear='\033[0m'
 
-if [ "\$1" = "clean" ]; then
+if [ "$1" = "clean" ]; then
   shopt -s extglob
   echo -e "\${bg_yellow}Cleaning up\${clear}"
-  find . -type f -not -name 'client-o*' -delete
-  find . -type d -not -name 'client-o*' -delete
+  rm -rf !(client-o*)
   echo -e "\${bg_green}Cleaned up\${clear}"
   shopt -u extglob
   exit 0
@@ -389,11 +380,10 @@ bg_magenta='\033[0;45m'
 bg_cyan='\033[0;46m'
 clear='\033[0m'
 
-if [ "\$1" = "clean" ]; then
+if [ "$1" = "clean" ]; then
   shopt -s extglob
   echo -e "\${bg_yellow}Cleaning up\${clear}"
-  find . -type f -not -name 'client-o*' -delete
-  find . -type d -not -name 'client-o*' -delete
+  rm -rf !(client-o*)
   echo -e "\${bg_green}Cleaned up\${clear}"
   shopt -u extglob
   exit 0
@@ -435,7 +425,7 @@ python \$onnxbridge/helper/convert_np_to_float_inp.py --inp \$Image_Name.npy --o
 
 # Run the model
 echo -e "\${bg_green}Running the model\${clear}"
-./${Model_Name}_${BACKEND}_${SCALE} 3 $SERVER_IP ${NUMTHREADS} < \$Image_Name.inp > output.txt
+./${Model_Name}_${BACKEND}_${SCALE} 3 $SERVER_IP < \$Image_Name.inp > output.txt
 
 # Print the output
 echo -e "\${bg_green}Printing the output\${clear}"

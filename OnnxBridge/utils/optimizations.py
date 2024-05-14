@@ -1,24 +1,3 @@
-"""
-Authors: Saksham Gupta.
-Copyright:
-Copyright (c) 2021 Microsoft Research
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 import os
 import struct
 
@@ -47,17 +26,7 @@ def numpy_float_array_to_float_val_str_nchw(input_array):
 
 def numpy_float_array_to_float_val_str_nhwc(input_array):
     chunk = []
-    if len(input_array.shape) == 5:
-        co, ci, d, h, w = input_array.shape
-        arr = np.zeros([co, d, h, w, ci])
-        for i in range(co):
-            for j in range(ci):
-                for k in range(d):
-                    for l in range(h):
-                        for m in range(w):
-                            arr[i][k][l][m][j] = input_array[i][j][k][l][m]
-        input_array = arr
-    elif len(input_array.shape) == 4:
+    if len(input_array.shape) == 4:
         co, ci, h, w = input_array.shape
         arr = np.zeros([co, h, w, ci])
         for i in range(co):
@@ -118,7 +87,7 @@ def dump_model_weights_as_inp(model, model_dir, model_name):
     :return: Path to saved Model Weights
     """
     weights_path = ""
-    weights_fname = model_name + "_input_weights.inp"
+    weights_fname = model_name + "_input_weights_.inp"
     weights_path = os.path.join(model_dir, weights_fname)
 
     # needed because initializers are not in sequential order and we need to strip them and dump in file
@@ -244,7 +213,7 @@ def strip_weights(model):
     return new_model
 
 
-def relu_maxpool_optimiser(program, value_info):
+def relu_maxpool_optimiser(program):
     """
     Optimises the Onnx Model by replacing the order where MaxPool appears after Relu.
     :param program: Onnx Model as a list of nodes
@@ -257,8 +226,6 @@ def relu_maxpool_optimiser(program, value_info):
 
             relu.inputs, maxpool.inputs = maxpool.inputs, relu.inputs
             relu.outputs, maxpool.outputs = maxpool.outputs, relu.outputs
-
-            value_info[maxpool.outputs[0]] = value_info[relu.outputs[0]]
 
             program[idx] = maxpool
             program[idx + 1] = relu

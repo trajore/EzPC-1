@@ -292,3 +292,100 @@ inline void freeTripleKey(TripleKeyPack &key){
     delete[] key.b;
     delete[] key.c;
 }
+
+inline void freeDPFKeyPack(DPFKeyPack &key){
+    if (!LlamaConfig::dealer->ramdisk) {
+        delete key.s;
+    }
+}
+
+inline void freeDPFKeyPackPair(std::pair<DPFKeyPack, DPFKeyPack> &keys){
+    delete[] keys.first.s;
+    delete[] keys.second.s;
+}
+
+inline void freeDPFKeyPack(DPFETKeyPack &key){
+    if (!LlamaConfig::dealer->ramdisk) {
+        delete key.s;
+    }
+}
+
+inline void freeDPFKeyPackPair(std::pair<DPFETKeyPack, DPFETKeyPack> &keys){
+    delete[] keys.first.s;
+    delete[] keys.second.s;
+}
+
+inline void freeLUTKeyPack(LUTKeyPack &key){
+    freeDPFKeyPack(key.dpfKey);
+}
+
+inline void freeLUTKeyPackPair(std::pair<LUTKeyPack, LUTKeyPack> &keys){
+    delete[] keys.first.dpfKey.s;
+    delete[] keys.second.dpfKey.s;
+}
+
+inline void freeClipKeyPack(ClipKeyPack &key)
+{
+    freeDCFKeyPack(key.cmpKey.dcfKey);
+}
+
+inline void freeClipKeyPackPair(std::pair<ClipKeyPack, ClipKeyPack> &keys)
+{
+    delete[] keys.first.cmpKey.dcfKey.k;
+    delete[] keys.second.cmpKey.dcfKey.k;
+    delete[] keys.first.cmpKey.dcfKey.g;
+    delete[] keys.first.cmpKey.dcfKey.v;
+}
+
+inline void freeF2BF16KeyPack(F2BF16KeyPack &key)
+{
+    freeDCFKeyPack(key.dcfKey);
+}
+
+inline void freeF2BF16KeyPackPair(std::pair<F2BF16KeyPack, F2BF16KeyPack> &keys)
+{
+    delete[] keys.first.dcfKey.k;
+    delete[] keys.second.dcfKey.k;
+    delete[] keys.first.dcfKey.g;
+    delete[] keys.first.dcfKey.v;
+}
+
+inline void freeTruncateReduceKeyPack(TruncateReduceKeyPack &key)
+{
+    freeDCFKeyPack(key.dcfKey);
+}
+
+inline void freeTruncateReduceKeyPackPair(std::pair<TruncateReduceKeyPack, TruncateReduceKeyPack> &keys)
+{
+    delete[] keys.first.dcfKey.k;
+    delete[] keys.second.dcfKey.k;
+    delete[] keys.first.dcfKey.g;
+    delete[] keys.first.dcfKey.v;
+}
+
+inline void freeSlothDreluKeyPack(SlothDreluKeyPack &key){
+    freeDPFKeyPack(key.dpfKey);
+}
+
+inline void freeSlothDreluKeyPackPair(std::pair<SlothDreluKeyPack, SlothDreluKeyPack> &keys){
+    delete[] keys.first.dpfKey.s;
+    delete[] keys.second.dpfKey.s;
+}
+
+inline void freeLUTDPFETKeyPack(LUTDPFETKeyPack &key){
+    freeDPFKeyPack(key.dpfKey);
+}
+
+inline void freeLUTDPFETKeyPackPair(std::pair<LUTDPFETKeyPack, LUTDPFETKeyPack> &keys){
+    delete[] keys.first.dpfKey.s;
+    delete[] keys.second.dpfKey.s;
+}
+
+inline void freeWrapDPFKeyPack(WrapDPFKeyPack &key){
+    freeDPFKeyPack(key.dpfKey);
+}
+
+inline void freeWrapDPFKeyPackPair(std::pair<WrapDPFKeyPack, WrapDPFKeyPack> &keys){
+    delete[] keys.first.dpfKey.s;
+    delete[] keys.second.dpfKey.s;
+}

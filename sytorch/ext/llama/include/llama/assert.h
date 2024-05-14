@@ -2,7 +2,7 @@
 #include <iostream>
 
 inline void assert_failed(const char* file, int line, const char* function, const char* expression) {
-    std::cout << "Assertion failed: " << expression << " in " << function << " at " << file << ":" << line << std::endl;
+    std::cerr << "Assertion failed: " << expression << " in " << function << " at " << file << ":" << line << std::endl;
     exit(1);
 }
 

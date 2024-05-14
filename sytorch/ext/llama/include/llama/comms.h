@@ -25,6 +25,7 @@ SOFTWARE.
 #include <iostream>
 #include <llama/keypack.h>
 #include <llama/array.h>
+#include <llama/assert.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -51,7 +52,6 @@ public:
     std::fstream file;
     uint64_t bytesSent = 0;
     uint64_t bytesReceived = 0;
-    
 
     Peer(std::string ip, int port);
     Peer(int sendsocket, int recvsocket) {
@@ -78,6 +78,8 @@ public:
 
     void send_mult_key(const MultKey &k);
 
+    void send_square_key(const SquareKey &k);
+
     void send_matmul_key(const MatMulKey &k);
 
     void send_new_mult_key(const MultKeyNew &k, int bw1, int bw2);
@@ -87,6 +89,10 @@ public:
     void send_conv3d_key(const Conv3DKey &k);
 
     void send_dcf_keypack(const DCFKeyPack &kp);
+
+    void send_dpf_keypack(const DPFKeyPack &kp);
+
+    void send_dpfet_keypack(const DPFETKeyPack &kp);
 
     void send_ddcf_keypack(const DualDCFKeyPack &kp);
 
@@ -132,6 +138,32 @@ public:
 
     void send_triple_key(const TripleKeyPack &kp);
 
+    void send_edabits_prtrunc_key(const EdabitsPrTruncKeyPack &kp, int bw);
+
+    void send_pubcmp_key(const PubCmpKeyPack &kp);
+
+    void send_clip_key(const ClipKeyPack &kp);
+
+    void send_lut_key(const LUTKeyPack &kp);
+    
+    void send_lutdpfet_key(const LUTDPFETKeyPack &kp);
+
+    void send_f2bf16_key(const F2BF16KeyPack &kp);
+
+    void send_truncate_reduce_key(const TruncateReduceKeyPack &kp);
+
+    void send_lutss_key(const LUTSSKeyPack &kp);
+
+    void send_sloth_drelu_key(const SlothDreluKeyPack &kp);
+
+    void send_wrap_dpf_key(const WrapDPFKeyPack &kp);
+    
+    void send_wrap_ss_key(const WrapSSKeyPack &kp);
+
+    void send_sloth_lrs_key(const SlothLRSKeyPack &kp);
+
+    void send_sloth_sign_extend_key(const SlothSignExtendKeyPack &kp);
+
     void send_uint8_array(const uint8_t *data, int size);
 
     void recv_uint8_array(uint8_t *data, int size);
@@ -149,32 +181,30 @@ Peer* waitForPeer(int port);
 class Dealer {
 public:
     int consocket;
-    bool useFile = true;
+    bool useFile = false;
     std::fstream file;
     uint64_t bytesSent = 0;
     uint64_t bytesReceived = 0;
-    bool ramdisk =true;
+    bool ramdisk = false;
     char *ramdiskBuffer;
     char *ramdiskStart;
     int ramdiskSize;
-    bool ramdisk_path = false;
 
     Dealer(std::string ip, int port);
 
-    Dealer(std::string filename, bool ramdisk,bool ramdisk_path) {
+    Dealer(std::string filename, bool ramdisk) {
         this->useFile = true;
         this->ramdisk = ramdisk;
-        this->ramdisk_path = ramdisk_path;
-        if (ramdisk && ramdisk_path) {
+        if (ramdisk) {
             int fd = open(filename.c_str(), O_RDWR | O_CREAT, 0);
             struct stat sb;
             fstat(fd, &sb);
-            std::cerr << "Key Size: " << sb.st_size << " bytes" << "\n";
-            int advise=posix_fadvise(fd, 0, sb.st_size, POSIX_FADV_WILLNEED);
+            std::cerr << "Key Size: " << sb.st_size << " bytes" << std::endl;
             ramdiskSize = sb.st_size;
-            ramdiskBuffer = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+            ramdiskBuffer = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
+            always_assert(ramdiskBuffer != MAP_FAILED);
             ramdiskStart = ramdiskBuffer;
-            std::cout << "RAMDISK: " << (int *)ramdiskBuffer << "\n";
+            // std::cout << "RAMDISK: " << (int *)ramdiskBuffer << std::endl;
             ::close(fd);
         }
         else {
@@ -188,6 +218,8 @@ public:
 
     MultKey recv_mult_key();
 
+    SquareKey recv_square_key();
+
     osuCrypto::block recv_block();
 
     GroupElement recv_ge(int bw);
@@ -197,6 +229,10 @@ public:
     void recv_ge_array(int bw, int size, GroupElement *arr);
 
     DCFKeyPack recv_dcf_keypack(int Bin, int Bout, int groupSize);
+
+    DPFKeyPack recv_dpf_keypack(int bin, int bout);
+
+    DPFETKeyPack recv_dpfet_keypack(int bin);
 
     DualDCFKeyPack recv_ddcf_keypack(int Bin, int Bout, int groupSize);
 
@@ -260,4 +296,31 @@ public:
 
     TripleKeyPack recv_triple_key(int bw, int64_t na, int64_t nb, int64_t nc);
 
+    EdabitsPrTruncKeyPack recv_edabits_prtrunc_key(int bw);
+
+    PubCmpKeyPack recv_pubcmp_key(int bin);
+
+    ClipKeyPack recv_clip_key(int bin);
+
+    LUTKeyPack recv_lut_key(int bin, int bout);
+    
+    LUTDPFETKeyPack recv_lutdpfet_key(int bin, int bout);
+
+    F2BF16KeyPack recv_f2bf16_key(int bin);
+
+    TruncateReduceKeyPack recv_truncate_reduce_key(int bin, int shift);
+
+    LUTSSKeyPack recv_lutss_key(int bin, int bout);
+
+    SlothDreluKeyPack recv_slothdrelu_key(int bin);
+
+    WrapDPFKeyPack recv_wrap_dpf_key(int bin);
+
+    WrapSSKeyPack recv_wrap_ss_key(int bin);
+
+    SlothLRSKeyPack recv_sloth_lrs_key(int bin, int shift);
+
+    SlothSignExtendKeyPack recv_sloth_sign_extend_key(int bin, int bout);
+
 };
+

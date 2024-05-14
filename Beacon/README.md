@@ -20,7 +20,6 @@ The scripts to reproduce the microbenchmark results on the paper [Secure Floatin
 ## Benchmarks
 
 The scripts to reproduce the benchmark results on the paper [Secure Floating-Point Training](https://eprint.iacr.org/2023/467)
-
 # Usage
 
 ## Using the beacon frontend

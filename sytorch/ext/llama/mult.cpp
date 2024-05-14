@@ -70,3 +70,25 @@ GroupElement mult_helper(uint8_t party, GroupElement x, GroupElement y, GroupEle
         return e + peer->recv_input();
     }
 }
+
+std::pair<SquareKey, SquareKey> keyGenSquare(GroupElement rin, GroupElement rout)
+{
+    SquareKey k1, k2;
+
+    GroupElement c  = rin * rin + rout;
+    auto b_split = splitShare(2 * rin, 64);
+    auto c_split = splitShare(c, 64);
+    
+    k1.b = (b_split.first);
+    k1.c = (c_split.first);
+    
+    k2.b = (b_split.second);
+    k2.c = (c_split.second);
+    
+    return std::make_pair(k1, k2);
+}
+
+GroupElement evalSquare(int party, GroupElement x, const SquareKey &k)
+{
+    return party * x * x - x * k.b + k.c;
+}

@@ -59,6 +59,9 @@ void Conv2DPlaintext(int N, int H, int W, int CI,
 void matmul_eval_helper(int party, int dim1, int dim2, int dim3, GroupElement *A,
                             GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc);
 
+void matmul_eval_helper_triangular(int party, int dim1, int dim2, int dim3, GroupElement *A,
+                            GroupElement *B, GroupElement *C, GroupElement *ka, GroupElement *kb, GroupElement *kc);
+
 void packBitArray(GroupElement *A, int size, uint8_t *out);
 
 struct Conv2DCache {
@@ -147,23 +150,3 @@ void ConvTranspose3DLoopInnerClear(
     GroupElement* inputArr, 
     GroupElement* filterArr, 
     GroupElement* outArr);
-
-void ConvTranspose2DLoopInnerClear(
-    int64_t N,
-    int64_t H,
-    int64_t W,
-    int64_t CI,
-    int64_t FH,
-    int64_t FW,
-    int64_t CO,
-    int64_t zPadHLeft,
-    int64_t zPadHRight,
-    int64_t zPadWLeft,
-    int64_t zPadWRight,
-    int64_t strideH,
-    int64_t strideW,
-    int64_t outH,
-    int64_t outW,
-    GroupElement *inputArr,
-    GroupElement *filterArr,
-    GroupElement *outArr);

@@ -20,9 +20,17 @@ add_library(${PROJECT_NAME}
     mult.cpp
     pubdiv.cpp
     relu.cpp
+    signextend.cpp
+    pubcmp.cpp
+    clip.cpp
+    dpf.cpp
+    lut.cpp
+    select.cpp
+    fixtobfloat16.cpp
+    wrap.cpp
 )
 
-target_link_libraries (${PROJECT_NAME} Eigen3::Eigen Threads::Threads cryptoTools)
+target_link_libraries (${PROJECT_NAME} Eigen3::Eigen Threads::Threads cryptoTools bitpack)
 target_include_directories(${PROJECT_NAME}
 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

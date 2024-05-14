@@ -1,6 +1,3 @@
-
-![OnnxBridge](image.png)
-
 # OnnxBridge 
 An end-to-end compiler for converting Onnx Models to Secure Cryptographic backends : **Secfloat**(Floating Point) and **LLAMA**(FSS based).
 - [Setup](#setup)
@@ -48,8 +45,7 @@ Secfloat/compile_secfloat.sh "/path/to/file.cpp"
 ```
 ```bash
 # for LLAMA / CLEARTEXT_LLAMA 
-LLAMA/compile_llama.sh "/path/to/file.cpp" [-Do_Masking]
-# `-Do_Masking` is an optional argument if we are compiling for Frontend,this helps generate masks.dat file
+LLAMA/compile_llama.sh "/path/to/file.cpp"
 ```
 ---
 ## Inference with each backend:
@@ -75,7 +71,7 @@ cd OnnxBridge
 python3 main.py --path "/path/to/onnx-file" --generate "executable" --backend SECFLOAT_CLEARTEXT
 
 # start inference
-cat input_input.inp model_input_weights.inp | ./model_secfloat_ct
+cat input_input.inp model_input_weights_.inp | ./model_secfloat_ct
 ```
 
 #### **LLAMA**
@@ -87,19 +83,12 @@ python3 main.py --path "/path/to/onnx-file" --generate "code" --backend LLAMA --
 # compile secure code
 LLAMA/compile_llama.sh "/path/to/file.cpp"
 
-# Enable and mount Ramdisk on client and server machines
-./ramdrive.sh <ramdisk_size>
 # generate LLAMA keys on client and server machines
-./<network> 1 <num_threads>
-
-
+./<network> 1
 
 # start inference on server and client machines
-./<network> 2 <model_weights_file> <num_threads> <ramdisk_path "true/false">// Server
-./<network> 3 <server-ip> <num_threads> < <image_file> <ramdisk_path "true/false">// Client
-
-# Disable and unmount Ramdisk on client and server machines
-./unmount_ramdrive.sh
+./<network> 2 <ip> <model_weights_file> // Server
+./<network> 3 <server-ip> < <image_file> // Client
 ```
 
 #### **LLAMA Cleartext**
@@ -109,7 +98,7 @@ cd OnnxBridge
 python3 main.py --path "/path/to/onnx-file" --generate "executable" --backend CLEARTEXT_LLAMA --scale scale --bitlength bitlength
 
 # start inference 
-./<network> 0 <model_weights_file> < <image_file> 
+./<network> 0 127.0.0.1 <model_weights_file> < <image_file> 
 ```
 
 
@@ -256,16 +245,6 @@ This completes the node implementation in backend.
 ```
 
 ## Demo
-Below are the available demos:
-- OnnxBridge with Secfloat. [link](/OnnxBridge/Secfloat/demo/Readme.md)
-- OnnxBridge with LLAMA. [link](/OnnxBridge/Demo/hinet_cifar10-llama/README.md)
-- Toy Example - Single Inference. [link](/sytorch/Toy%20example-%20single%20inference.md)
-- Toy Example - Multiple Inference. [link](/sytorch/Toy%20example-%20multiple%20inference.md)
-- Inference App - Chexpert. [link](/inference-app/README.md)
-- Inference App - fMRI-MLP. [link](/OnnxBridge/Demo/mlp/README.md)
-
-## Helper Scripts 
-These [scripts](/OnnxBridge/helper/README.md) are useful during development and testing.
-
+Follow [Demo](Secfloat/demo/Readme.md) for OnnxBridge demo with Secfloat.
 
 

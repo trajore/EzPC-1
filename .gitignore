@@ -5,6 +5,20 @@ mpc_venv
 # Vim c_tags files
 c_*
 SEAL
+CMakeFiles
+CMakeCache.txt
+# Python c_tags files
+Makefile
+build_dir
+executables
+_deps
+sytorch/LLMs/model.zip
+sytorch/LLMs/key_files.zip
+sytorch/LLMs/dataset.zip
+sytorch/LLMs/script.sh:Zone.Identifier
+sytorch/LLMs/models--bert-base-cased
+sytorch/LLMs/datasets
+sytorch/LLMs/.locks
 *.onnx
 .idea/
 .vscode/

@@ -21,6 +21,9 @@ SOFTWARE.
 
 #include <llama/comms.h>
 #include <llama/assert.h>
+#include <bitpack/bitpack.h>
+#include <llama/stats.h>
+#include <chrono>
 
 using namespace LlamaConfig;
 
@@ -66,7 +69,7 @@ Peer::Peer(std::string ip, int port) {
         const int one = 1;
         setsockopt(sendsocket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
     }
-    std::cerr << "connected" << "\n";
+    std::cerr << "connected" << std::endl;
 
 }
 
@@ -136,7 +139,7 @@ Peer* waitForPeer(int port) {
         close(mysocket);
     }
     
-    std::cerr << "connected" << "\n";
+    std::cerr << "connected" << std::endl;
     return new Peer(sendsocket, recvsocket);
 }
 
@@ -211,6 +214,7 @@ void Peer::send_input(const GroupElement &g) {
 
 void Peer::send_batched_input(GroupElement *g, int size, int bw)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     if (bw > 32) {
         uint64_t *temp = new uint64_t[size];
         for (int i = 0; i < size; i++) {
@@ -267,10 +271,13 @@ void Peer::send_batched_input(GroupElement *g, int size, int bw)
         delete[] temp;
         bytesSent += size;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    sendTime += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 void Peer::recv_batched_input(uint64_t *g, int size, int bw)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     if (bw > 32) {
         if (useFile) {
             this->file.read((char *)g, 8*size);
@@ -318,6 +325,8 @@ void Peer::recv_batched_input(uint64_t *g, int size, int bw)
         delete[] tmp;
         bytesReceived += size;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    recvTime += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 void Peer::send_mult_key(const MultKey &k) {
@@ -328,6 +337,11 @@ void Peer::send_mult_key(const MultKey &k) {
         send(sendsocket, buf, sizeof(MultKey), 0);
     }
     bytesSent += sizeof(MultKey);
+}
+
+void Peer::send_square_key(const SquareKey &k) {
+    send_ge(k.b, 64);
+    send_ge(k.c, 64);
 }
 
 void Peer::send_matmul_key(const MatMulKey &k) {
@@ -457,6 +471,26 @@ void Peer::send_dcf_keypack(const DCFKeyPack &kp) {
     for (int i = 0; i < kp.groupSize * kp.Bin; ++i) {
         send_ge(kp.v[i], kp.Bout);
     }
+    send_ge(42, 64);
+}
+
+void Peer::send_dpf_keypack(const DPFKeyPack &kp) {
+    for (int i = 0; i < kp.bin + 1; ++i) {
+        send_block(kp.s[i]);
+    }
+    send_ge(kp.tLcw, kp.bin);
+    send_ge(kp.tRcw, kp.bin);
+    send_ge(kp.payload, kp.bout);
+    send_ge(42, 64);
+}
+
+void Peer::send_dpfet_keypack(const DPFETKeyPack &kp) {
+    for (int i = 0; i < kp.bin + 1 - 7; ++i) {
+        send_block(kp.s[i]);
+    }
+    send_ge(kp.tLcw, kp.bin);
+    send_ge(kp.tRcw, kp.bin);
+    send_block(kp.leaf);
     send_ge(42, 64);
 }
 
@@ -613,8 +647,8 @@ void Peer::send_taylor_key(const TaylorKeyPack &kp, int bl, int m) {
         send_ge(kp.msnzbKey.micKey.z[i], bl);
     }
     send_ge(kp.msnzbKey.r, bl);
-    send_ge(kp.squareKey.a, bl);
     send_ge(kp.squareKey.b, bl);
+    send_ge(kp.squareKey.c, bl);
     send_ge(kp.privateScaleKey.rin, bl);
     send_ge(kp.privateScaleKey.rout, bl);
     send_bulkylrs_key(kp.lrsKeys[0], bl, m);
@@ -699,6 +733,97 @@ void Peer::send_triple_key(const TripleKeyPack &kp)
     }
 }
 
+void Peer::send_edabits_prtrunc_key(const EdabitsPrTruncKeyPack &kp, int bw)
+{
+    send_ge(kp.a, bw);
+    send_ge(kp.b, bw);
+}
+
+void Peer::send_pubcmp_key(const PubCmpKeyPack &kp)
+{
+    send_dcf_keypack(kp.dcfKey);
+    send_ge(kp.rout, 1);
+}
+
+void Peer::send_clip_key(const ClipKeyPack &kp)
+{
+    send_pubcmp_key(kp.cmpKey);
+    send_ge(kp.a, kp.bin);
+    send_ge(kp.b, kp.bin);
+    send_ge(kp.c, kp.bin);
+    send_ge(kp.d1, kp.bin);
+    send_ge(kp.d2, kp.bin);
+}
+
+void Peer::send_lut_key(const LUTKeyPack &kp)
+{
+    send_dpf_keypack(kp.dpfKey);
+    send_ge(kp.rout, kp.bout);
+}
+
+void Peer::send_f2bf16_key(const F2BF16KeyPack &kp)
+{
+    int bin = kp.bin;
+    send_dcf_keypack(kp.dcfKey);
+    send_dcf_keypack(kp.dcfTruncate);
+    send_ge(kp.rout_k, bin);
+    send_ge(kp.rout_m, bin);
+    send_ge(kp.rin, bin);
+    send_ge(kp.prod, bin);
+    send_ge(kp.rout, 13);
+    send_ge(kp.rProd, bin);
+}
+
+void Peer::send_truncate_reduce_key(const TruncateReduceKeyPack &kp)
+{
+    send_dcf_keypack(kp.dcfKey);
+    send_ge(kp.rout, kp.bin - kp.shift);
+}
+
+void Peer::send_lutss_key(const LUTSSKeyPack &kp)
+{
+    send_ge(kp.b0, 64);
+    send_ge(kp.b1, 64);
+    send_ge(kp.b2, 64);
+    send_ge(kp.b3, 64);
+    send_ge(kp.routRes, kp.bout);
+    send_ge(kp.routCorr, kp.bout);
+    send_ge(kp.rout, kp.bout);
+}
+
+void Peer::send_lutdpfet_key(const LUTDPFETKeyPack &kp)
+{
+    send_dpfet_keypack(kp.dpfKey);
+    send_ge(kp.routRes, kp.bout);
+    send_ge(kp.routCorr, 1);
+}
+
+void Peer::send_sloth_drelu_key(const SlothDreluKeyPack &kp)
+{
+    send_dpfet_keypack(kp.dpfKey);
+    send_ge(kp.r, 1);
+}
+
+void Peer::send_wrap_dpf_key(const WrapDPFKeyPack &kp)
+{
+    send_dpfet_keypack(kp.dpfKey);
+    send_ge(kp.r, 1);
+}
+    
+void Peer::send_wrap_ss_key(const WrapSSKeyPack &kp)
+{
+    send_ge(kp.b0, 64);
+    if (kp.bin == 7)
+        send_ge(kp.b1, 64);
+}
+
+void Peer::send_sloth_lrs_key(const SlothLRSKeyPack &kp)
+{
+    send_ge(kp.rout, kp.bin);
+    send_ge(kp.msb, kp.bin);
+    send_ge(kp.select, kp.bin);
+}
+
 GroupElement Peer::recv_input() {
     char buf[8];
     if (useFile) {
@@ -742,11 +867,11 @@ Dealer::Dealer(std::string ip, int port) {
 
 void Dealer::close() {
     if (useFile) {
-        if (!ramdisk && ramdisk_path) {
+        if (!ramdisk) {
             file.close();
         }
         else {
-            // std::cout << (int)(ramdiskBuffer - ramdiskStart) << "bytes read" << "\n";
+            // std::cout << (int)(ramdiskBuffer - ramdiskStart) << "bytes read" << std::endl;
             // always_assert(ramdiskBuffer - ramdiskStart == ramdiskSize);
         }
     }
@@ -758,17 +883,15 @@ void Dealer::close() {
 GroupElement Dealer::recv_mask() {
     char buf[8];
     if (useFile) {
-        if (ramdisk && ramdisk_path) {
+        if (ramdisk) {
             GroupElement g = *(uint64_t *)ramdiskBuffer;
             ramdiskBuffer += 8;
             bytesReceived += 8;
             return g;
         }
         this->file.read(buf, 8);
-        //std::cout << "dealer recv mask" << "\n";
     } else {
-       // recv(consocket, buf, 8, MSG_WAITALL);
-        std::cout << "dealer recv mask" << "\n";
+        recv(consocket, buf, 8, MSG_WAITALL);
     }
     GroupElement g = *(uint64_t *)buf;
     bytesReceived += 8;
@@ -778,27 +901,32 @@ GroupElement Dealer::recv_mask() {
 MultKey Dealer::recv_mult_key() {
     char buf[sizeof(MultKey)];
     if (useFile) {
-        if (ramdisk && ramdisk_path) {
-            MultKey k=(*(MultKey *)ramdiskBuffer);
+        if (ramdisk) {
+            MultKey k(*(MultKey *)ramdiskBuffer);
             ramdiskBuffer += sizeof(MultKey);
             bytesReceived += sizeof(MultKey);
             return k;
         }
         this->file.read(buf, sizeof(MultKey));
-        //std::cout<< "dealer recv mult key" << "\n";
     } else {
-        //recv(consocket, buf, sizeof(MultKey), MSG_WAITALL);
-        std::cout << "dealer recv mask" << "\n";
+        recv(consocket, buf, sizeof(MultKey), MSG_WAITALL);
     }
     MultKey k(*(MultKey *)buf);
     bytesReceived += sizeof(MultKey);
     return k;
 }
 
+SquareKey Dealer::recv_square_key() {
+    SquareKey k;
+    k.b = recv_ge(64);
+    k.c = recv_ge(64);
+    return k;
+}
+
 osuCrypto::block Dealer::recv_block() {
     char buf[sizeof(osuCrypto::block)];
     if (useFile) {
-        if (ramdisk && ramdisk_path) {
+        if (ramdisk) {
             // std::cout << *(uint64_t *) ramdiskBuffer << std::endl;
             // Kanav: This could break when the endianness of the machine changes
             osuCrypto::block b = osuCrypto::toBlock(*(uint64_t *) (ramdiskBuffer + 8), *(uint64_t *) ramdiskBuffer);
@@ -807,10 +935,8 @@ osuCrypto::block Dealer::recv_block() {
             return b;
         }
         this->file.read(buf, sizeof(osuCrypto::block));
-        //std::cout<< "dealer recv block" << "\n";
     } else {
-       // recv(consocket, buf, sizeof(osuCrypto::block), MSG_WAITALL);
-        std::cout << "dealer recv mask" << "\n";
+        recv(consocket, buf, sizeof(osuCrypto::block), MSG_WAITALL);
     }
     osuCrypto::block b = *(osuCrypto::block *)buf;
     bytesReceived += sizeof(osuCrypto::block);
@@ -821,7 +947,7 @@ GroupElement Dealer::recv_ge(int bl) {
     if (bl > 32) {
         char buf[8];
         if (useFile) {
-            if (ramdisk && ramdisk_path) {
+            if (ramdisk) {
                 GroupElement g = *(uint64_t *)ramdiskBuffer;
                 ramdiskBuffer += 8;
                 bytesReceived += 8;
@@ -829,10 +955,8 @@ GroupElement Dealer::recv_ge(int bl) {
                 return g;
             }
             this->file.read(buf, 8);
-            //std::cerr << "dealer recv ge 32" << "\n";
         } else {
-           // recv(consocket, buf, 8, MSG_WAITALL);
-            std::cout << "dealer recv mask" << "\n";
+            recv(consocket, buf, 8, MSG_WAITALL);
         }
         GroupElement g(*(uint64_t *)buf);
         mod(g, bl);
@@ -842,7 +966,7 @@ GroupElement Dealer::recv_ge(int bl) {
     else if (bl > 16) {
         char buf[4];
         if (useFile) {
-            if (ramdisk && ramdisk_path) {
+            if (ramdisk) {
                 GroupElement g = *(uint32_t *)ramdiskBuffer;
                 ramdiskBuffer += 4;
                 bytesReceived += 4;
@@ -850,10 +974,8 @@ GroupElement Dealer::recv_ge(int bl) {
                 return g;
             }
             this->file.read(buf, 4);
-            //std::cout << "dealer recv ge 16" << "\n";
         } else {
-           // recv(consocket, buf, 4, MSG_WAITALL);
-            std::cout << "dealer recv mask" << "\n";
+            recv(consocket, buf, 4, MSG_WAITALL);
         }
         GroupElement g(*(uint32_t *)buf);
         mod(g, bl);
@@ -863,7 +985,7 @@ GroupElement Dealer::recv_ge(int bl) {
     else if (bl > 8) {
         char buf[2];
         if (useFile) {
-            if (ramdisk && ramdisk_path) {
+            if (ramdisk) {
                 GroupElement g = *(uint16_t *)ramdiskBuffer;
                 ramdiskBuffer += 2;
                 bytesReceived += 2;
@@ -871,10 +993,8 @@ GroupElement Dealer::recv_ge(int bl) {
                 return g;
             }
             this->file.read(buf, 2);
-            //std::cout<< "dealer recv ge 8" << "\n";
         } else {
-            //recv(consocket, buf, 2, MSG_WAITALL);
-            std::cout << "dealer recv mask" << "\n";
+            recv(consocket, buf, 2, MSG_WAITALL);
         }
         GroupElement g(*(uint16_t *)buf);
         mod(g, bl);
@@ -884,18 +1004,16 @@ GroupElement Dealer::recv_ge(int bl) {
     else {
         char buf[1];
         if (useFile) {
-            if (ramdisk && ramdisk_path) {
+            if (ramdisk) {
                 GroupElement g = *(uint8_t *)ramdiskBuffer;
                 ramdiskBuffer += 1;
                 bytesReceived += 1;
                 mod(g, bl);
                 return g;
             }
-           this->file.read(buf, 1);
-            //std::cout << "dealer recv ge 1" << "\n";
+            this->file.read(buf, 1);
         } else {
-           // recv(consocket, buf, 1, MSG_WAITALL);
-            std::cout << "dealer recv mask" << "\n";
+            recv(consocket, buf, 1, MSG_WAITALL);
         }
         GroupElement g(*(uint8_t *)buf);
         mod(g, bl);
@@ -908,17 +1026,15 @@ GroupElement Dealer::recv_ge(int bl) {
 void Dealer::recv_ge_array(const GroupElement *g, int size) {
     char *buf = (char *)g;
     if (useFile) {
-        if (ramdisk && ramdisk_path) {
+        if (ramdisk) {
             memcpy(buf, ramdiskBuffer, 8*size);
             ramdiskBuffer += 8*size;
             bytesReceived += 8*size;
             return;
         }
         this->file.read(buf, 8*size);
-        //std::cout << "dealer recv ge array" << "\n";
     } else {
-       // recv(consocket, buf, 8*size, MSG_WAITALL);
-        std::cout << "dealer recv mask" << "\n";
+        recv(consocket, buf, 8*size, MSG_WAITALL);
     }
     bytesReceived += 8 * size;
     
@@ -930,9 +1046,10 @@ DCFKeyPack Dealer::recv_dcf_keypack(int Bin, int Bout, int groupSize) {
     kp.Bout = Bout;
     kp.groupSize = groupSize;
 
-    if (ramdisk && ramdisk_path) {
+    if (ramdisk) {
         kp.k = (osuCrypto::block *)ramdiskBuffer;
         ramdiskBuffer += sizeof(osuCrypto::block) * (Bin + 1);
+        bytesReceived += sizeof(osuCrypto::block) * (Bin + 1);
     } else {
         kp.k = new osuCrypto::block[Bin + 1];
         for (int i = 0; i < Bin + 1; ++i) {
@@ -948,12 +1065,62 @@ DCFKeyPack Dealer::recv_dcf_keypack(int Bin, int Bout, int groupSize) {
     if (false) {
         kp.v = (GroupElement *)ramdiskBuffer;
         ramdiskBuffer += sizeof(GroupElement) * (Bin * groupSize);
+        bytesReceived += sizeof(GroupElement) * (Bin * groupSize);
     } else {
         kp.v = new GroupElement[Bin * groupSize];
         for (int i = 0; i < Bin * groupSize; ++i) {
             kp.v[i] = recv_ge(Bout);
         }
     }
+    GroupElement t = recv_ge(64);
+    always_assert(t == 42);
+    return kp;
+}
+
+DPFKeyPack Dealer::recv_dpf_keypack(int bin, int bout) {
+    DPFKeyPack kp;
+    kp.bin = bin;
+    kp.bout = bout;
+
+    if (ramdisk) {
+        kp.s = (osuCrypto::block *)ramdiskBuffer;
+        ramdiskBuffer += sizeof(osuCrypto::block) * (bin + 1);
+        bytesReceived += sizeof(osuCrypto::block) * (bin + 1);
+    } else {
+        kp.s = new osuCrypto::block[bin + 1];
+        for (int i = 0; i < bin + 1; ++i) {
+            kp.s[i] = recv_block();
+        }
+    }
+
+    kp.tLcw = recv_ge(bin);
+    kp.tRcw = recv_ge(bin);
+    kp.payload = recv_ge(bout);
+
+    GroupElement t = recv_ge(64);
+    always_assert(t == 42);
+    return kp;
+}
+
+DPFETKeyPack Dealer::recv_dpfet_keypack(int bin) {
+    DPFETKeyPack kp;
+    kp.bin = bin;
+
+    if (ramdisk) {
+        kp.s = (osuCrypto::block *)ramdiskBuffer;
+        ramdiskBuffer += sizeof(osuCrypto::block) * (bin + 1 - 7);
+        bytesReceived += sizeof(osuCrypto::block) * (bin + 1 - 7);
+    } else {
+        kp.s = new osuCrypto::block[bin + 1 - 7];
+        for (int i = 0; i < bin + 1 - 7; ++i) {
+            kp.s[i] = recv_block();
+        }
+    }
+
+    kp.tLcw = recv_ge(bin);
+    kp.tRcw = recv_ge(bin);
+    kp.leaf = recv_block();
+
     GroupElement t = recv_ge(64);
     always_assert(t == 42);
     return kp;
@@ -1152,9 +1319,10 @@ ReluKeyPack Dealer::recv_relu_key(int Bin, int Bout) {
     kp.Bout = Bout;
     kp.g = new GroupElement[groupSize];
     // kp.dcfKey = recv_dcf_keypack(Bin, Bout, groupSize);
-    if (ramdisk && ramdisk_path) {
+    if (ramdisk) {
         kp.k = (osuCrypto::block *)ramdiskBuffer;
         ramdiskBuffer += sizeof(osuCrypto::block) * (Bin + 1);
+        bytesReceived += sizeof(osuCrypto::block) * (Bin + 1);
     } else {
         kp.k = new osuCrypto::block[Bin + 1];
         for(int i = 0; i < Bin + 1; ++i) {
@@ -1164,9 +1332,10 @@ ReluKeyPack Dealer::recv_relu_key(int Bin, int Bout) {
     for(int i = 0; i < groupSize; ++i) {
         kp.g[i] = recv_ge(Bout);
     }
-    if (ramdisk && ramdisk_path && (Bin > 32)) {
+    if (ramdisk && (Bin > 32)) {
         kp.v = (GroupElement *)ramdiskBuffer;
         ramdiskBuffer += sizeof(GroupElement) * (Bin * groupSize);
+        bytesReceived += sizeof(GroupElement) * (Bin * groupSize);
     }
     else {
         kp.v = new GroupElement[Bin * groupSize];
@@ -1398,8 +1567,8 @@ TaylorKeyPack Dealer::recv_taylor_key(int bl, int m, int sf) {
         kp.msnzbKey.micKey.z[i] = recv_ge(bl);
     }
     kp.msnzbKey.r = recv_ge(bl);
-    kp.squareKey.a = recv_ge(bl);
     kp.squareKey.b = recv_ge(bl);
+    kp.squareKey.c = recv_ge(bl);
     kp.privateScaleKey.rin = recv_ge(bl);
     kp.privateScaleKey.rout = recv_ge(bl);
     uint64_t scales[m];
@@ -1535,4 +1704,156 @@ TripleKeyPack Dealer::recv_triple_key(int bw, int64_t na, int64_t nb, int64_t nc
         mod(k.c[i], bw);
     }
     return k;
+}
+
+EdabitsPrTruncKeyPack Dealer::recv_edabits_prtrunc_key(int bw)
+{
+    EdabitsPrTruncKeyPack kp;
+    kp.a = recv_ge(bw);
+    kp.b = recv_ge(bw);
+    return kp;
+}
+
+PubCmpKeyPack Dealer::recv_pubcmp_key(int bin)
+{
+    PubCmpKeyPack kp;
+    kp.bin = bin;
+    kp.dcfKey = recv_dcf_keypack(bin, 1, 1);
+    kp.rout = recv_ge(1);
+    return kp;
+}
+
+ClipKeyPack Dealer::recv_clip_key(int bin)
+{
+    ClipKeyPack kp;
+    kp.bin = bin;
+    kp.cmpKey = recv_pubcmp_key(bin);
+    kp.a = recv_ge(bin);
+    kp.b = recv_ge(bin);
+    kp.c = recv_ge(bin);
+    kp.d1 = recv_ge(bin);
+    kp.d2 = recv_ge(bin);
+    return kp;
+}
+
+LUTKeyPack Dealer::recv_lut_key(int bin, int bout)
+{
+    LUTKeyPack kp;
+    kp.bin = bin;
+    kp.bout = bout;
+
+    kp.dpfKey = recv_dpf_keypack(bin, bout);
+    kp.rout = recv_ge(bout);
+    return kp;
+}
+
+F2BF16KeyPack Dealer::recv_f2bf16_key(int bin)
+{
+    F2BF16KeyPack kp;
+    kp.bin = bin;
+    kp.dcfKey = recv_dcf_keypack(bin, bin, 1);
+    kp.dcfTruncate = recv_dcf_keypack(bin - 8, 8, 1);
+    kp.rout_k = recv_ge(bin);
+    kp.rout_m = recv_ge(bin);
+    kp.rin = recv_ge(bin);
+    kp.prod = recv_ge(bin);
+    kp.rout = recv_ge(13);
+    kp.rProd = recv_ge(bin);
+    return kp;
+}
+
+TruncateReduceKeyPack Dealer::recv_truncate_reduce_key(int bin, int shift)
+{
+    TruncateReduceKeyPack kp;
+    kp.bin = bin;
+    kp.shift = shift;
+
+    kp.dcfKey = recv_dcf_keypack(shift, bin-shift, 1);
+    kp.rout = recv_ge(bin-shift);
+    return kp;
+}
+
+LUTSSKeyPack Dealer::recv_lutss_key(int bin, int bout)
+{
+    LUTSSKeyPack kp;
+    kp.bin = bin;
+    kp.bout = bout;
+
+    kp.b0 = recv_ge(64);
+    kp.b1 = recv_ge(64);
+    kp.b2 = recv_ge(64);
+    kp.b3 = recv_ge(64);
+    kp.routRes = recv_ge(bout);
+    kp.routCorr = recv_ge(bout);
+    kp.rout = recv_ge(bout);
+    return kp;
+}
+
+LUTDPFETKeyPack Dealer::recv_lutdpfet_key(int bin, int bout)
+{
+    LUTDPFETKeyPack kp;
+    kp.bin = bin;
+    kp.bout = bout;
+
+    kp.dpfKey = recv_dpfet_keypack(bin);
+    kp.routRes = recv_ge(bout);
+    kp.routCorr = recv_ge(1);
+    return kp;
+}
+
+SlothDreluKeyPack Dealer::recv_slothdrelu_key(int bin)
+{
+    SlothDreluKeyPack kp;
+    kp.bin = bin;
+    kp.dpfKey = recv_dpfet_keypack(bin-1);
+    kp.r = recv_ge(1);
+    return kp;
+}
+
+WrapDPFKeyPack Dealer::recv_wrap_dpf_key(int bin)
+{
+    WrapDPFKeyPack kp;
+    kp.bin = bin;
+    kp.dpfKey = recv_dpfet_keypack(bin);
+    kp.r = recv_ge(1);
+    return kp;
+}
+
+WrapSSKeyPack Dealer::recv_wrap_ss_key(int bin)
+{
+    WrapSSKeyPack kp;
+    kp.bin = bin;
+    kp.b0 = recv_ge(64);
+    if (bin == 7)
+        kp.b1 = recv_ge(64);
+    return kp;
+}
+
+SlothLRSKeyPack Dealer::recv_sloth_lrs_key(int bin, int shift)
+{
+    SlothLRSKeyPack kp;
+    kp.bin = bin;
+    kp.shift = shift;
+    kp.rout = recv_ge(bin);
+    kp.msb = recv_ge(bin);
+    kp.select = recv_ge(bin);
+
+    return kp;
+}
+
+SlothSignExtendKeyPack Dealer::recv_sloth_sign_extend_key(int bin, int bout)
+{
+    SlothSignExtendKeyPack kp;
+    kp.bin = bin;
+    kp.bout = bout;
+    kp.rout = recv_ge(bout);
+    kp.select = recv_ge(bout);
+
+    return kp;
+}
+
+void Peer::send_sloth_sign_extend_key(const SlothSignExtendKeyPack &kp)
+{
+    send_ge(kp.rout, kp.bout);
+    send_ge(kp.select, kp.bout);
 }

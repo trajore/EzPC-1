@@ -62,7 +62,7 @@ void ElemWiseActModelVectorMult(int32_t size, MASK_PAIR(GroupElement *inArr),
 
 void ArgMax(int32_t s1, int32_t s2, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr));
 
-void Relu(int32_t size, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), GroupElement *drelu);
+void Relu(int32_t size, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), GroupElement *drelu, std::string prefix = "");
 
 void ReluTruncate(int32_t size, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), int sf, GroupElement *drelu_cache);
 
@@ -70,7 +70,7 @@ void MaxPool(int32_t N, int32_t H, int32_t W, int32_t C, int32_t ksizeH,
              int32_t ksizeW, int32_t zPadHLeft, int32_t zPadHRight,
              int32_t zPadWLeft, int32_t zPadWRight, int32_t strideH,
              int32_t strideW, int32_t N1, int32_t imgH, int32_t imgW,
-             int32_t C1, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), GroupElement *oneHot);
+             int32_t C1, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), GroupElement *oneHot, std::string prefix = "");
 
 void AvgPool(int32_t N, int32_t H, int32_t W, int32_t C, int32_t ksizeH,
              int32_t ksizeW, int32_t zPadHLeft, int32_t zPadHRight,
@@ -82,11 +82,7 @@ void ScaleDown(int32_t size, MASK_PAIR(GroupElement *inArr), int32_t sf);
 
 void ScaleUp(int32_t size, MASK_PAIR(GroupElement *inArr), int32_t sf);
 
-void ElemWiseVectorPublicDiv(int32_t s1, MASK_PAIR(GroupElement *arr1), int32_t divisor,
-                             MASK_PAIR(GroupElement *outArr));
-
-void ElemWiseSecretSharedVectorMult(int32_t size, MASK_PAIR(GroupElement *inArr),
-                                    MASK_PAIR(GroupElement *multArrVec), MASK_PAIR(GroupElement *outputArr));
+void ElemWiseMul(int32_t size, GroupElement *inArr, GroupElement *multArrVec, GroupElement *outputArr, std::string prefix = "");
 
 void Floor(int32_t s1, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), int32_t sf);
 
@@ -94,7 +90,8 @@ void PiranhaSoftmax(int32_t s1, int32_t s2, MASK_PAIR(GroupElement *inArr), MASK
 
 void ARS(int32_t size, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), int32_t shift);
 
-void Select(int32_t size, GroupElement *s, GroupElement *x, GroupElement *out);
+void Select(int32_t size, GroupElement *s, GroupElement *x, GroupElement *out, std::string prefix = "", bool doReconstruct = true);
+void Select(int32_t size, int bin, GroupElement *s, GroupElement *x, GroupElement *out, std::string prefix = "", bool doReconstruct = true);
 
 void Relu2Round(int32_t size, MASK_PAIR(GroupElement *inArr), MASK_PAIR(GroupElement *outArr), GroupElement *drelu_cache, int effectiveInputBw);
 
@@ -143,23 +140,41 @@ void ConvTranspose3DWrapper(int64_t N,
     GroupElement* filterArr, 
     GroupElement* outArr);
 
-void ConvTranspose2DWrapper(int64_t N,
-                            int64_t H,
-                            int64_t W,
-                            int64_t CI,
-                            int64_t FH,
-                            int64_t FW,
-                            int64_t CO,
-                            int64_t zPadHLeft,
-                            int64_t zPadHRight,
-                            int64_t zPadWLeft,
-                            int64_t zPadWRight,
-                            int64_t strideH,
-                            int64_t strideW,
-                            int64_t outH,
-                            int64_t outW,
-                            GroupElement *inputArr,
-                            GroupElement *filterArr,
-                            GroupElement *outArr);
+void EdabitsPrTrunc(int size, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
+
+void LUT_dpf(int size, int bin, int bout, const std::vector<GroupElement> &tab, GroupElement *x, GroupElement *y, std::string prefix = "", bool doReconstruct = true);
+
+void nExp(int size, int bin, GroupElement *x, GroupElement *y, int scale);
+void Tanh(int size, GroupElement *x, GroupElement *y, int scale);
+
+void Clip(int size, int maxbw, GroupElement *x, GroupElement *y, std::string prefix = "");
+void Softmax(int32_t s1, int32_t s2, int bin, GroupElement *x, GroupElement *y, int32_t scale);
+void F2BF16(int size, GroupElement *x, GroupElement *y, std::string prefix = "");
+void Rsqrt(int size, GroupElement *x, GroupElement *y, GroupElement extradiv, int scale, std::string prefix = "");
+void Gelu(int size, int bin, GroupElement *x, GroupElement *y, int scale);
+void TruncateReduce(int size, int bin, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
+void LUT_dfpet(int size, int bin, int bout, const std::vector<GroupElement> &tab, GroupElement *x, GroupElement *y, std::string prefix, bool doReconstruct = true);
+void SlothDrelu(int size, int bin, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SlothRelu(int size, int bin, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SlothClip(int size, int bin, int maxbw, int bout, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SlothMaxpool(int s1, int s2, int bin, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SlothMaxpoolTriangular(int s1, int s2, int bin, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SumOfSquare(int s1, int s2, GroupElement *x, GroupElement *y, std::string prefix = "");
+void SlothLayerNorm(int s1, int s2, GroupElement *x, GroupElement *A, GroupElement *B, GroupElement *y, int scale);
+void SlothGemm(int s1, int s2, int s3, GroupElement *x, GroupElement *A, GroupElement *y, int scale);
+void SoftmaxTriangular(int32_t s1, int32_t s2, int bin, GroupElement *x, GroupElement *y, int32_t scale);
+void MatMul2DTriangular(int32_t s1, int32_t s2, int32_t s3, MASK_PAIR(GroupElement *A),
+            MASK_PAIR(GroupElement *B), MASK_PAIR(GroupElement *C), bool modelIsA);
+void SlothAttentionTriangular(int n_seq, int n_embd, int n_heads, GroupElement *q, GroupElement *k, GroupElement *v, GroupElement *out, int scale);
+void SlothLRS(int size, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
+void SlothARS(int size, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
+void SlothTR(int size, int bin, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
+void SlothGelu(int size, int bin, GroupElement *x, GroupElement *out, int scale);
+void SlothFaithfulARS(int size, int bin, GroupElement *x, GroupElement *y, int scale, std::string prefix = "");
 
 void reconstruct(int32_t size, GroupElement *arr, int bw);
+
+/////////////////////////////////////////////////
+void SlothSilu(int size, int bin, GroupElement *x, GroupElement *out, int scale);
+void SlothRMSNorm(int s1, int s2, GroupElement *x, GroupElement *A, GroupElement *B, GroupElement *y, int scale);
+// void SlothRMSNorm(int s1, int s2, GroupElement *x, GroupElement *A, GroupElement *y, int scale);

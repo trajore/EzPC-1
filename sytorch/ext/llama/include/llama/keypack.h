@@ -198,8 +198,8 @@ struct PrivateScaleKeyPack
 };
 
 struct SquareKey {
-    GroupElement a;
     GroupElement b;
+    GroupElement c;
 };
 
 struct MICKeyPack {
@@ -273,4 +273,146 @@ struct SignExtend2KeyPack
     DCFKeyPack dcfKey;
     GroupElement rw;
     GroupElement p[2];
+};
+
+struct EdabitsPrTruncKeyPack
+{
+    GroupElement a, b;
+};
+
+class DPFKeyPack
+{
+public:
+    int bin, bout;
+    osuCrypto::block *s;
+    union {
+        struct {
+            uint64_t tLcw;
+            uint64_t tRcw;
+        };
+        uint64_t tcw[2];
+    };
+    GroupElement payload;
+
+    DPFKeyPack(int bin, int bout) : bin(bin), bout(bout)
+    {
+        s = new osuCrypto::block[bin+1];
+        tLcw = 0;
+        tRcw = 0;
+    }
+
+    DPFKeyPack()
+    {
+        s = nullptr;
+        tLcw = 0;
+        tRcw = 0;
+    }
+};
+
+class DPFETKeyPack
+{
+public:
+    int bin;
+    osuCrypto::block *s;
+    union {
+        struct {
+            uint64_t tLcw;
+            uint64_t tRcw;
+        };
+        uint64_t tcw[2];
+    };
+    osuCrypto::block leaf;
+
+    DPFETKeyPack(int bin) : bin(bin)
+    {
+        s = new osuCrypto::block[bin+1-7];
+        tLcw = 0;
+        tRcw = 0;
+    }
+
+    DPFETKeyPack()
+    {
+        s = nullptr;
+        tLcw = 0;
+        tRcw = 0;
+    }
+};
+
+struct PubCmpKeyPack {
+    int bin;
+    DCFKeyPack dcfKey;
+    GroupElement rout;
+};
+
+struct ClipKeyPack {
+    int bin;
+    PubCmpKeyPack cmpKey;
+    GroupElement a, b, c, d1, d2;
+};
+
+struct LUTKeyPack {
+    int bin, bout;
+    DPFKeyPack dpfKey;
+    GroupElement rout;
+};
+
+struct F2BF16KeyPack {
+    int bin;
+    DCFKeyPack dcfKey, dcfTruncate;
+    GroupElement rout_k, rout_m, rin, prod, rout, rProd;
+};
+
+struct TruncateReduceKeyPack {
+    int bin, shift;
+    DCFKeyPack dcfKey;
+    GroupElement rout;
+};
+
+struct LUTSSKeyPack {
+    int bin, bout;
+    GroupElement b0, b1, b2, b3;
+    GroupElement routRes, routCorr;
+    GroupElement rout;
+};
+
+struct LUTDPFETKeyPack {
+    int bin, bout;
+    DPFETKeyPack dpfKey;
+    GroupElement routRes, routCorr;
+};
+
+struct SlothDreluKeyPack {
+    int bin;
+    DPFETKeyPack dpfKey;
+    GroupElement r;
+};
+
+struct WrapSSKeyPack {
+    int bin;
+    uint64_t b0, b1;
+};
+
+struct WrapDPFKeyPack {
+    int bin;
+    DPFETKeyPack dpfKey;
+    GroupElement r;
+};
+
+struct SlothLRSKeyPack {
+    int bin, shift;
+    GroupElement msb;
+    GroupElement rout;
+    GroupElement select;
+};
+
+struct SlothTRKeyPack {
+    int bin, shift;
+    GroupElement rout;
+    GroupElement select;
+};
+
+struct SlothSignExtendKeyPack {
+    int bin, bout;
+    GroupElement rout;
+    GroupElement select;
 };

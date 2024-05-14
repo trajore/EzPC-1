@@ -21,6 +21,7 @@ SOFTWARE.
 
 #include "relu.h"
 #include "dcf.h"
+#include <llama/dpf.h>
 #include <assert.h>
 
 std::pair<ReluKeyPack, ReluKeyPack> keyGenRelu(int Bin, int Bout,
@@ -253,5 +254,36 @@ GroupElement evalMaxpoolDouble_1(int party, GroupElement x, GroupElement y, cons
 GroupElement evalMaxpoolDouble_2(int party, GroupElement x, GroupElement y, GroupElement s, const MaxpoolDoubleKeyPack &k)
 {
     GroupElement res = evalRelu2_mult(party, s, y - x, k.reluKey) + (party * x) + k.rb;
+    return res;
+}
+
+std::pair<SlothDreluKeyPack, SlothDreluKeyPack> keyGenSlothDrelu(int bin, GroupElement rin, GroupElement rout)
+{
+    GroupElement x_1 = -rin;
+    mod(x_1, bin);
+    GroupElement y_1 = x_1;
+    mod(y_1, bin - 1);
+
+    auto dpfKeys = keyGenDPFET(bin - 1, y_1);
+    GroupElement r = rout ^ 1 ^ ((x_1 >> (bin - 1)) & 1);
+    auto r_split = splitShare(r, 1);
+
+    SlothDreluKeyPack k0, k1;
+    k0.bin = bin; k1.bin = bin;
+    k0.dpfKey = dpfKeys.first; k1.dpfKey = dpfKeys.second;
+    k0.r = r_split.first; k1.r = r_split.second;
+    return std::make_pair(k0, k1);
+}
+
+GroupElement evalSlothDrelu(int party, GroupElement x, const SlothDreluKeyPack &kp)
+{
+    GroupElement y_0 = - x - 1;
+    mod(y_0, kp.bin - 1);
+    GroupElement u_b = evalDPFET_LT(party, kp.dpfKey, y_0);
+    GroupElement res = u_b ^ kp.r;
+    if (party == 0)
+    {
+        res ^= ((x >> (kp.bin - 1)) & 1);
+    }
     return res;
 }

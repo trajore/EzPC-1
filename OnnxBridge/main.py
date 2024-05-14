@@ -1,24 +1,3 @@
-"""
-Authors: Saksham Gupta.
-Copyright:
-Copyright (c) 2021 Microsoft Research
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 import argparse, sys, os
 from sys import argv
 from utils import logger
@@ -27,13 +6,7 @@ from backend import prepare
 
 
 def parse_args():
-    backend = [
-        "CLEARTEXT_LLAMA",
-        "LLAMA",
-        "SECFLOAT",
-        "SECFLOAT_CLEARTEXT",
-        "CLEARTEXT_fp",
-    ]
+    backend = ["CLEARTEXT_LLAMA", "LLAMA", "SECFLOAT", "SECFLOAT_CLEARTEXT"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", required=True, type=str, help="Path to the Model.")
     parser.add_argument(
@@ -59,7 +32,7 @@ def parse_args():
     )
     parser.add_argument(
         "--generate",
-        required=True,
+        required=any(b in argv for b in [backend[2], backend[3]]),
         type=str,
         choices=["code", "executable"],
         default="code",
@@ -76,7 +49,7 @@ def main():
     mode = "u64" if args.backend == "LLAMA" else "i64"
 
     # Export the Model as Secfloat and writes to a cpp file
-    if args.backend in ["CLEARTEXT_LLAMA", "LLAMA", "CLEARTEXT_fp"]:
+    if args.backend in ["CLEARTEXT_LLAMA", "LLAMA"]:
         main_path = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(main_path, "LLAMA")
         backendrep.export_model(mode, args.scale, args.bitlength, args.backend)
@@ -92,7 +65,7 @@ def main():
             os.system(
                 f"{file_path}/compile_secfloat.sh {args.path[:-5]}_secfloat{ct}.cpp"
             )
-        elif args.backend in ["CLEARTEXT_LLAMA", "LLAMA", "CLEARTEXT_fp"]:
+        elif args.backend in ["CLEARTEXT_LLAMA", "LLAMA"]:
             os.system(
                 f"{file_path}/compile_llama.sh {args.path[:-5]}_{args.backend}_{args.scale}.cpp"
             )

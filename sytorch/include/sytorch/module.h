@@ -1,25 +1,23 @@
+#pragma once
 #include <sytorch/tensor.h>
 #include <fstream>
 #include <filesystem>
 #include <map>
 #include <algorithm>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <sytorch/backend/default.h>
 
 template <typename T>
 class SytorchModule {
 public:
 
     Tensor<T> activation;
-    Backend<T> *backend = new ClearText<T>;
+    Backend<T> *backend = nullptr;
     LayerGraphNode<T> *root = nullptr;
     bool debug = true;
     u64 scale;
 
     std::vector<LayerGraphNode<T> *> allNodesInExecutionOrder;
-    const std::vector<std::string> functionalLayers = {"Add", "Concat", "GeLU", "SoftMax", "Split", "View", "Transpose", "_MatMul", "_ScalarMul"};
+    const std::vector<std::string> functionalLayers = {"Add", "Concat", "GeLU", "SoftMax", "Split", "View", "Transpose", "_MatMul", "_ScalarMul", "ReLU", "AttentionMask", "LocalAttentionMask", "_Tanh", "Unsqueeze", "SoftMaxTriangular", "_MatMulTriangular", "AttentionTriangular", "_Mul", "SiLU", "_ScalarDiv", "_Sin", "_Cos", "RotateHalf", "RotaryEmbeddingBeforeSinCos"};
     static std::map<std::string, LayerGraphNode<T> *> functionalLayerMap;
 
 public:
@@ -28,7 +26,7 @@ public:
 
     SytorchModule() : activation({}), allNodesInExecutionOrder(0)
     {
-
+        backend = defaultBackend<T>();
     }
 
     void generateFunctionalLayerMap()
@@ -57,7 +55,7 @@ public:
         }
         id = id + "|" + paramstring(args...);
         if (functionalLayerMap.find(id) == functionalLayerMap.end()) {
-            std::cerr << "Layer not found = \"" << id << "\"" << "\n";
+            std::cerr << "Layer not found = \"" << id << "\"" << std::endl;
             exit(1);
         }
         return functionalLayerMap[id];
@@ -150,27 +148,16 @@ public:
         size_t size_in_bytes = std::filesystem::file_size(weightsFile);
         always_assert(size_in_bytes % 4 == 0); // as it's float
         size_t numParameters = size_in_bytes / 4;
+        printf("%d\n",numParameters);
         float *floatWeights = new float[numParameters];
-        //float *buffer;
-        int buffersize = 0;
         
-        // std::ifstream file(weightsFile, std::ios::binary);
-        // file.read((char*) floatWeights, size_in_bytes);
-        // file.close();
-        int fd1 = open(weightsFile.c_str(), O_RDWR | O_CREAT, 0);
-        struct stat sb;
-        fstat(fd1, &sb);
-        buffersize = sb.st_size;
-        int advise=posix_fadvise(fd1, 0, sb.st_size, POSIX_FADV_WILLNEED);
-        floatWeights= (float*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
-        //floatWeights = buffer;
-        std::cerr << "Model Weights Size: " << sb.st_size << " bytes" << "\n";
-        ::close(fd1);
+        std::ifstream file(weightsFile, std::ios::binary);
+        file.read((char*) floatWeights, size_in_bytes);
+        file.close();
         u64 scale = this->scale;
         
         size_t wIdx = 0;
         for (auto &node: allNodesInExecutionOrder) {
-            
             auto layer = node->layer;
             if (layer->name == "BatchNormInference") {
                 auto bn = (BatchNormInference<T>*) layer;
@@ -180,25 +167,24 @@ public:
                 auto meanPtr = floatWeights + wIdx + 2 * channel;
                 auto varPtr = floatWeights + wIdx + 3 * channel;
                 for (int j = 0; j < channel; ++j) {
-                    bn->A(j) = type_cast<T>((gammaPtr[j] / std::sqrt(varPtr[j])) * (1LL << scale));
-                    bn->B(j) = type_cast<T>((betaPtr[j] - gammaPtr[j] * meanPtr[j] / std::sqrt(varPtr[j])) * (1LL << (2 * scale)));
+                    bn->A(j) = T((gammaPtr[j] / std::sqrt(varPtr[j])) * (1LL << scale));
+                    bn->B(j) = T((betaPtr[j] - gammaPtr[j] * meanPtr[j] / std::sqrt(varPtr[j])) * (1LL << (2 * scale)));
                 }
                 wIdx += 4 * channel;
             }
             else {
                 auto weights = layer->getweights();
                 for (u64 j = 0; j < weights.size; j++) {
-                    weights.data[j] = type_cast<T>(floatWeights[wIdx + j] * (1LL << scale));
+                    weights.data[j] = T(floatWeights[wIdx + j] * (1LL << scale));
                 }
 
                 wIdx += weights.size;
-                
 
                 auto bias = layer->getbias();
                 if (layer->useBias) {
 
                     for (u64 j = 0; j < bias.size; ++j) {
-                        bias.data[j] = type_cast<T>(floatWeights[wIdx + j] * (float)(1LL << (2*scale)));
+                        bias.data[j] = T(floatWeights[wIdx + j] * (1LL << (2*scale)));
                     }
 
                     wIdx += bias.size;
@@ -207,13 +193,12 @@ public:
                     bias.zero();
                 }
             }
+
         }
-        
-        always_assert(wIdx == numParameters);
-    
-        //delete floatWeights;
-        munmap(floatWeights, buffersize);
-       
+
+        // always_assert(wIdx == numParameters);
+
+        delete[] floatWeights;
     }
 
     void dumpi64(const std::string weightsFile)
@@ -315,6 +300,54 @@ public:
         return c;
     }
 
+    Tensor<T>& silu(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<SiLU<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("SiLU", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& relu(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<ReLU<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("ReLU", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& unsqueeze(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<Unsqueeze<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("Unsqueeze", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& tanh(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_Tanh<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_Tanh", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
     Tensor<T>& softmax(Tensor<T> &a)
     {
         if (a.graphGenMode) {
@@ -376,6 +409,32 @@ public:
         return c;
     }
 
+    Tensor<T>& matmul_triangular(Tensor<T> &a, Tensor<T> &b)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_MatMulTriangular<T>>({&a, &b});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_MatMulTriangular", {&a, &b});
+        std::vector<Tensor<T> *> arr = {&a, &b};
+        auto &c = cNode->layer->forward(arr);
+        return c;
+    }
+
+    Tensor<T>& mul(Tensor<T> &a, Tensor<T> &b)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_Mul<T>>({&a, &b});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_Mul", {&a, &b});
+        std::vector<Tensor<T> *> arr = {&a, &b};
+        auto &c = cNode->layer->forward(arr);
+        return c;
+    }
+
     Tensor<T>& scalarmul(Tensor<T> &a, double scalar)
     {
         if (a.graphGenMode) {
@@ -385,6 +444,67 @@ public:
 
         auto cNode = getFunctionalNode("_ScalarMul", {&a}, scalar);
         auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& scalardiv(Tensor<T> &a, double scalar)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_ScalarDiv<T>>({&a}, scalar);
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_ScalarDiv", {&a}, scalar);
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& attention_mask(Tensor<T> &a, double scalar)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<AttentionMask<T>>({&a}, scalar);
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("AttentionMask", {&a}, scalar);
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& local_attention_mask(Tensor<T> &a, double scalar)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<LocalAttentionMask<T>>({&a}, scalar);
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("LocalAttentionMask", {&a}, scalar);
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& softmax_triangular(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<SoftMaxTriangular<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("SoftMaxTriangular", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& attention_triangular(Tensor<T> &q, Tensor<T> &k, Tensor<T> &v, u64 n_heads)
+    {
+        if (q.graphGenMode) {
+            auto &c = functionalGraphGen<AttentionTriangular<T>>({&q, &k, &v}, n_heads);
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("AttentionTriangular", {&q, &k, &v}, n_heads);
+        std::vector<Tensor<T> *> arr = {&q, &k, &v};
+        auto &c = cNode->layer->forward(arr);
         return c;
     }
 
@@ -407,7 +527,61 @@ public:
             node->layer->eval();
         });
     }
+
+    //////////////////////////////////////////////////
+
+    Tensor<T>& sin(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_Sin<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_Sin", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& cos(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<_Cos<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("_Cos", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& rotate_half(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<RotateHalf<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("RotateHalf", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+    Tensor<T>& rotary_embedding_before_sin_cos(Tensor<T> &a)
+    {
+        if (a.graphGenMode) {
+            auto &c = functionalGraphGen<RotaryEmbeddingBeforeSinCos<T>>({&a});
+            return c;
+        }
+
+        auto cNode = getFunctionalNode("RotaryEmbeddingBeforeSinCos", {&a});
+        auto &c = cNode->layer->forward(a);
+        return c;
+    }
+
+//////////////////////////////////////////////////
 };
+
+
 
 template <typename T>
 std::map<std::string, LayerGraphNode<T> *> SytorchModule<T>::functionalLayerMap = std::map<std::string, LayerGraphNode<T> *>();
